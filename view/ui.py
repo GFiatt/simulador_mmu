@@ -108,7 +108,7 @@ class UI:
     def run(self):
         self.root.mainloop()
 
-
+    run()
 
     """
     def showRAM(self):
