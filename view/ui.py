@@ -1,169 +1,159 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 import random
 import os
-from control.instruction import Instruction, Type
 import re
+from control.instruction import Instruction, Type
+from control.computer import Computer
 import tkinter.font as font
-
 
 class UI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Simulación MMU")
-        self.root.geometry("800x600")
+        self.root.geometry("1280x800")
         self.root.configure(bg="#C0C0C0")
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
 
-        import tkinter.font as font
         default_font = font.nametofont("TkDefaultFont")
         default_font.configure(family="MS Sans Serif", size=9)
 
-        self.init_config_screen()
+        self.instructions = []
+        self.instruction_objects = []
+        self.computer = None
+        self.mmu = None
 
+        self._init_config_screen()
 
-
-    # ----------- PRIMERA PANTALLA: ENTRADA DE DATOS -----------
-    def init_config_screen(self):
-        self.clear_window()
-        self.root.geometry("800x600")
-        self.root.configure(bg="#C0C0C0")
+    def _init_config_screen(self):
+        self._clear_window()
 
         self.config_frame = tk.Frame(self.root, bg="#C0C0C0", relief="ridge", borderwidth=2, padx=20, pady=20)
         self.config_frame.place(relx=0.5, rely=0.5, anchor="center")
 
-        label_opts = {"bg": "#C0C0C0", "font": ("MS Sans Serif", 9)}
-        entry_opts = {"font": ("MS Sans Serif", 9), "width": 30, "relief": "sunken", "bd": 2}
-
         tk.Label(self.config_frame, text="Datos para la Simulación", bg="#C0C0C0",
-                font=("MS Sans Serif", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 15))
+                 font=("MS Sans Serif", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 15))
 
-        tk.Label(self.config_frame, text="Semilla para random:", **label_opts).grid(row=1, column=0, sticky="e", padx=(0, 10), pady=5)
-        self.seed_entry = tk.Entry(self.config_frame, **entry_opts)
-        self.seed_entry.grid(row=1, column=1, sticky="w", pady=5)
+        self._add_labeled_entry("Semilla para random:", 1, "seed_entry")
+        self._add_algorithm_dropdown("Algoritmo a simular:", 2)
+        self._add_file_selector("Archivo de instrucciones (opcional):", 3)
+        self._add_labeled_entry("Número de procesos (P):", 4, "processes_entry")
+        self._add_labeled_entry("Cantidad de operaciones (N):", 5, "operations_entry")
 
-        tk.Label(self.config_frame, text="Algoritmo a simular:", **label_opts).grid(row=2, column=0, sticky="e", padx=(0, 10), pady=5)
+        tk.Button(self.config_frame, text="Iniciar Simulación", command=self._start_simulation,
+                  relief="raised", bd=2, font=("MS Sans Serif", 9)).grid(row=6, columnspan=2, pady=20)
+
+    def _add_labeled_entry(self, label, row, attr_name):
+        opts = {"bg": "#C0C0C0", "font": ("MS Sans Serif", 9)}
+        tk.Label(self.config_frame, text=label, **opts).grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
+        entry = tk.Entry(self.config_frame, font=("MS Sans Serif", 9), width=30, relief="sunken", bd=2)
+        entry.grid(row=row, column=1, sticky="w", pady=5)
+        setattr(self, attr_name, entry)
+
+    def _add_algorithm_dropdown(self, label, row):
+        opts = {"bg": "#C0C0C0", "font": ("MS Sans Serif", 9)}
+        tk.Label(self.config_frame, text=label, **opts).grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
         self.algorithm_var = tk.StringVar()
-        self.algorithm_dropdown = ttk.Combobox(self.config_frame, textvariable=self.algorithm_var, state="readonly", width=28)
-        self.algorithm_dropdown['values'] = ("FIFO", "SC", "MRU", "RND")
-        self.algorithm_dropdown.current(0)
-        self.algorithm_dropdown.grid(row=2, column=1, sticky="w", pady=5)
+        dropdown = ttk.Combobox(self.config_frame, textvariable=self.algorithm_var, state="readonly", width=28)
+        dropdown['values'] = ("FIFO", "SC", "MRU", "RND")
+        dropdown.current(0)
+        dropdown.grid(row=row, column=1, sticky="w", pady=5)
 
-        tk.Label(self.config_frame, text="Archivo de instrucciones (opcional):", **label_opts).grid(row=3, column=0, sticky="e", padx=(0, 10), pady=5)
+    def _add_file_selector(self, label, row):
+        opts = {"bg": "#C0C0C0", "font": ("MS Sans Serif", 9)}
+        tk.Label(self.config_frame, text=label, **opts).grid(row=row, column=0, sticky="e", padx=(0, 10), pady=5)
         self.file_path = tk.StringVar()
         file_frame = tk.Frame(self.config_frame, bg="#C0C0C0")
-        file_frame.grid(row=3, column=1, sticky="w", pady=5)
+        file_frame.grid(row=row, column=1, sticky="w", pady=5)
         tk.Entry(file_frame, textvariable=self.file_path, width=23, relief="sunken", bd=2).grid(row=0, column=0)
-        tk.Button(file_frame, text="Seleccionar...", relief="raised", bd=2, command=self.select_file).grid(row=0, column=1, padx=(5, 0))
+        tk.Button(file_frame, text="Seleccionar...", relief="raised", bd=2, command=self._select_file).grid(row=0, column=1, padx=(5, 0))
 
-        tk.Label(self.config_frame, text="Número de procesos (P):", **label_opts).grid(row=4, column=0, sticky="e", padx=(0, 10), pady=5)
-        self.processes_entry = tk.Entry(self.config_frame, **entry_opts)
-        self.processes_entry.grid(row=4, column=1, sticky="w", pady=5)
-
-        tk.Label(self.config_frame, text="Cantidad de operaciones (N):", **label_opts).grid(row=5, column=0, sticky="e", padx=(0, 10), pady=5)
-        self.operations_entry = tk.Entry(self.config_frame, **entry_opts)
-        self.operations_entry.grid(row=5, column=1, sticky="w", pady=5)
-
-        tk.Button(self.config_frame, text="Iniciar Simulación", command=self.start_simulation,
-                relief="raised", bd=2, font=("MS Sans Serif", 9)).grid(row=6, columnspan=2, pady=20)
-
-
-
-
-    def select_file(self):
+    def _select_file(self):
         path = filedialog.askopenfilename(filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")])
         if path:
             self.file_path.set(path)
 
-    def clear_window(self):
+    def _clear_window(self):
         for widget in self.root.winfo_children():
             widget.destroy()
 
-    # ----------- SEGUNDA PANTALLA: SIMULACIÓN -----------
-    def start_simulation(self):
+    def _start_simulation(self):
         try:
-            seed_str = self.seed_entry.get()
-            algorithm = self.algorithm_var.get()
-            file_path = self.file_path.get()
-            p_str = self.processes_entry.get()
-            n_str = self.operations_entry.get()
-
-            if not seed_str.isdigit():
-                raise ValueError("La semilla debe ser un número entero.")
-            if not p_str.isdigit():
-                raise ValueError("El número de procesos debe ser un entero.")
-            if not n_str.isdigit():
-                raise ValueError("La cantidad de operaciones debe ser un entero.")
-
-            self.seed = int(seed_str)
-            self.selected_algorithm = algorithm
-            self.instructions_file = file_path if file_path else None
-            self.num_processes = int(p_str)
-            self.num_operations = int(n_str)
-
+            seed = self._validate_inputs()
+            self.seed = seed
         except ValueError as ve:
-            tk.messagebox.showerror("Error en los datos", str(ve))
+            messagebox.showerror("Error en los datos", str(ve))
             return
 
-        self.clear_window()
-        self.root.geometry("800x600")
-        self.root.configure(bg="#C0C0C0")
+        self._clear_window()
 
         if self.instructions_file:
-            if not self.load_instructions_from_file():
+            if not self._load_instructions_from_file():
                 return
         else:
-            self.generate_instructions()
+            self._generate_instructions()
 
-        self.setup_ram_display()
-        self.setup_mmu_tables()
-        self.setup_stats_panels()
+        self.computer = Computer(session=self.instruction_objects, algorithm=self.selected_algorithm)
+        self.computer.run()
+        self.mmu = self.computer.mmu
 
+        self._build_layout()
 
+    def _validate_inputs(self):
+        seed_str = self.seed_entry.get()
+        algorithm = self.algorithm_var.get()
+        file_path = self.file_path.get()
+        p_str = self.processes_entry.get()
+        n_str = self.operations_entry.get()
 
-    def load_instructions_from_file(self):
+        if not seed_str.isdigit(): raise ValueError("La semilla debe ser un número entero.")
+        if not p_str.isdigit(): raise ValueError("El número de procesos debe ser un entero.")
+        if not n_str.isdigit(): raise ValueError("La cantidad de operaciones debe ser un entero.")
+
+        self.selected_algorithm = algorithm
+        self.instructions_file = file_path if file_path else None
+        self.num_processes = int(p_str)
+        self.num_operations = int(n_str)
+
+        return int(seed_str)
+
+    def _load_instructions_from_file(self):
         try:
             with open(self.instructions_file, "r") as f:
                 lines = [line.strip() for line in f.readlines() if line.strip()]
 
-            if not lines:
-                raise ValueError("El archivo no contiene instrucciones.")
+            if not lines: raise ValueError("El archivo no contiene instrucciones.")
 
-            valid_lines = []
             for line in lines:
-                if self.validate_instruction_format(line):
-                    valid_lines.append(line)
-                else:
+                if not self._validate_instruction_format(line):
                     raise ValueError(f"Formato inválido en línea:\n{line}")
 
-            self.instructions = valid_lines
+            self.instructions = lines
             print("Instrucciones cargadas desde archivo:")
             for inst in self.instructions:
                 print(inst)
 
-            self.parse_instructions()
-            return True  # ✅ Éxito
+            self._parse_instructions()
+            return True
 
         except Exception as e:
-            tk.messagebox.showerror("Error al leer archivo", str(e))
+            messagebox.showerror("Error al leer archivo", str(e))
             self.file_path.set("")
             self.instructions_file = None
-            return False  # ✅ Error
-    
-    def validate_instruction_format(self, line: str) -> bool:
+            return False
+
+    def _validate_instruction_format(self, line):
         line = line.strip().lower()
         patterns = [
-            r"^new\(\d+,\d+\)$",          # new(pid, size)
-            r"^use\(\d+\)$",              # use(ptr)
-            r"^delete\(\d+\)$",           # delete(ptr)
-            r"^kill\(\d+\)$"              # kill(pid)
+            r"^new\(\d+,\d+\)$",
+            r"^use\(\d+\)$",
+            r"^delete\(\d+\)$",
+            r"^kill\(\d+\)$"
         ]
-
         return any(re.fullmatch(p, line) for p in patterns)
 
-    def generate_instructions(self):
+    def _generate_instructions(self):
         random.seed(self.seed)
-
         self.instructions = []
         symbol_tables = {pid: [] for pid in range(1, self.num_processes + 1)}
         kill_done = set()
@@ -171,194 +161,135 @@ class UI:
 
         while total_ops < self.num_operations:
             pid = random.randint(1, self.num_processes)
-
-            if pid in kill_done:
-                continue
+            if pid in kill_done: continue
 
             table = symbol_tables[pid]
-            op = None
-
             if not table:
-                op = f"new({pid},{random.randint(50, 1000)})"
-                ptr_id = len(table) + 1
-                table.append(ptr_id)
+                self.instructions.append(f"new({pid},{random.randint(50, 1000)})")
+                table.append(len(table) + 1)
             else:
                 op_type = random.choices(["use", "delete", "new", "kill"], weights=[40, 20, 30, 10])[0]
                 if op_type == "new":
-                    op = f"new({pid},{random.randint(50, 1000)})"
-                    ptr_id = len(table) + 1
-                    table.append(ptr_id)
+                    self.instructions.append(f"new({pid},{random.randint(50, 1000)})")
+                    table.append(len(table) + 1)
                 elif op_type == "use":
                     ptr = random.choice(table)
-                    op = f"use({ptr})"
+                    self.instructions.append(f"use({ptr})")
                 elif op_type == "delete":
                     ptr = random.choice(table)
-                    op = f"delete({ptr})"
+                    self.instructions.append(f"delete({ptr})")
                     table.remove(ptr)
                 elif op_type == "kill":
-                    op = f"kill({pid})"
+                    self.instructions.append(f"kill({pid})")
                     kill_done.add(pid)
                     table.clear()
 
-            self.instructions.append(op)
             total_ops += 1
 
-        print("Instrucciones generadas automáticamente:")
-        for inst in self.instructions:
-            print(inst)
-        self.save_generated_instructions_to_file()
-        self.parse_instructions()
+        self._save_generated_instructions_to_file()
+        self._parse_instructions()
 
-    def save_generated_instructions_to_file(self):
+    def _save_generated_instructions_to_file(self):
         try:
-            output_dir = "generated_instructions"
-            os.makedirs(output_dir, exist_ok=True)
-
-            file_path = os.path.join(output_dir, f"instrucciones_seed_{self.seed}.txt")
-
-            with open(file_path, "w") as f:
+            os.makedirs("generated_instructions", exist_ok=True)
+            path = os.path.join("generated_instructions", f"instrucciones_seed_{self.seed}.txt")
+            with open(path, "w") as f:
                 for line in self.instructions:
                     f.write(line + "\n")
-
-            tk.messagebox.showinfo("Archivo guardado", f"Instrucciones guardadas en:\n{file_path}")
+            messagebox.showinfo("Archivo guardado", f"Instrucciones guardadas en:\n{path}")
         except Exception as e:
-            tk.messagebox.showerror("Error al guardar archivo", str(e))
-        
-    def parse_instructions(self):
-        self.instruction_objects = []
+            messagebox.showerror("Error al guardar archivo", str(e))
 
+    def _parse_instructions(self):
+        self.instruction_objects = []
         for line in self.instructions:
             if line.startswith("new"):
                 parts = line.strip("new()").split(",")
-                pid = int(parts[0])
-                size = int(parts[1])
-                self.instruction_objects.append(Instruction(Type.NEW, pid=pid, size=size))
-
+                self.instruction_objects.append(Instruction(Type.NEW, pid=int(parts[0]), size=int(parts[1])))
             elif line.startswith("use"):
                 ptr = int(line.strip("use()"))
                 self.instruction_objects.append(Instruction(Type.USE, pid=None, ptr=ptr))
-
             elif line.startswith("delete"):
                 ptr = int(line.strip("delete()"))
                 self.instruction_objects.append(Instruction(Type.DELETE, pid=None, ptr=ptr))
-
             elif line.startswith("kill"):
                 pid = int(line.strip("kill()"))
                 self.instruction_objects.append(Instruction(Type.KILL, pid=pid))
-            
-        self.setup_ram_display()
-        self.setup_mmu_tables()
-        self.setup_stats_panels()
 
+    def _build_layout(self):
+        top_frame = tk.Frame(self.root, bg="#C0C0C0")
+        top_frame.pack(pady=10)
 
-    def setup_ram_display(self):
-        label_style = {"bg": "#C0C0C0", "font": ("MS Sans Serif", 9)}
-        
-        tk.Label(self.root, text="RAM - OPT", **label_style).pack()
-        self.canvas_opt = tk.Canvas(self.root, height=20, width=800, bg="white", relief="sunken", bd=2)
+        tk.Label(top_frame, text="RAM - OPT", font=("MS Sans Serif", 9, "bold"), bg="#C0C0C0").pack()
+        self.canvas_opt = tk.Canvas(top_frame, height=25, width=1200, bg="white", relief="sunken", bd=2)
         self.canvas_opt.pack()
 
-        tk.Label(self.root, text="RAM - [ALG]", **label_style).pack()
-        self.canvas_alg = tk.Canvas(self.root, height=20, width=800, bg="white", relief="sunken", bd=2)
+        tk.Label(top_frame, text=f"RAM - [{self.selected_algorithm}]", font=("MS Sans Serif", 9, "bold"), bg="#C0C0C0").pack(pady=(10, 0))
+        self.canvas_alg = tk.Canvas(top_frame, height=25, width=1200, bg="white", relief="sunken", bd=2)
         self.canvas_alg.pack()
 
+        self._draw_ram_canvas(self.canvas_opt, [])
+        self._draw_ram_canvas(self.canvas_alg, [])
 
-    def setup_mmu_tables(self):
-        frame = tk.Frame(self.root, bg="#C0C0C0")
-        frame.pack(pady=10)
+        middle_frame = tk.Frame(self.root, bg="#C0C0C0")
+        middle_frame.pack(pady=10, fill="x")
+        self._create_table_with_scroll(middle_frame, "MMU - OPT").pack(side="left", padx=10)
+        self._create_table_with_scroll(middle_frame, f"MMU - [{self.selected_algorithm}]").pack(side="right", padx=10)
 
-        self.mmu_opt_frame = self.create_mmu_table(frame, "MMU - OPT")
-        self.mmu_opt_frame.grid(row=0, column=0, padx=20)
+        bottom_frame = tk.Frame(self.root, bg="#C0C0C0")
+        bottom_frame.pack(pady=10, fill="x")
+        self._create_statistics_block(bottom_frame, "OPT").pack(side="left", padx=40)
+        self._create_statistics_block(bottom_frame, self.selected_algorithm).pack(side="right", padx=40)
 
-        self.mmu_alg_frame = self.create_mmu_table(frame, "MMU - [ALG]")
-        self.mmu_alg_frame.grid(row=0, column=1, padx=20)
+    def _draw_ram_canvas(self, canvas, pages):
+        canvas.delete("all")
+        x = 5
+        for i in range(60):
+            canvas.create_rectangle(x, 5, x + 18, 20, fill="gray", outline="black")
+            canvas.create_text(x + 9, 12, text="", font=("MS Sans Serif", 6))
+            x += 20
 
-
-    def create_mmu_table(self, parent, title):
+    def _create_table_with_scroll(self, parent, title):
         frame = tk.LabelFrame(parent, text=title, bg="#C0C0C0")
-        tree = ttk.Treeview(frame, columns=("page_id", "pid", "loaded", "l_addr", "m_addr", "d_addr", "loaded_t", "mark"), show="headings", height=15)
-
+        tree = ttk.Treeview(frame, columns=("PAGE ID", "PID", "LOADED", "L-ADDR", "M-ADDR", "D-ADDR", "LOADED-T", "MARK"), show="headings", height=15)
         for col in tree["columns"]:
-            tree.heading(col, text=col.upper())
+            tree.heading(col, text=col)
             tree.column(col, width=80, anchor="center")
-
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
-
         tree.grid(row=0, column=0)
         scrollbar.grid(row=0, column=1, sticky="ns")
-
-        return tree
-
-    def setup_stats_panels(self):
-        container = tk.Frame(self.root, bg="#C0C0C0")
-        container.pack(pady=10)
-
-        self.stats_opt = self.create_stats_table(container, "OPT")
-        self.stats_opt.grid(row=0, column=0, padx=40)
-
-        self.stats_alg = self.create_stats_table(container, "ALG")
-        self.stats_alg.grid(row=0, column=1, padx=40)
-
-
-    def create_stats_table(self, parent, label):
-        frame = tk.LabelFrame(parent, text=f"Estadísticas - {label}", bg="white")
-
-        rows = [
-            ("Processes", "---"),
-            ("Sim-Time", "---"),
-            ("RAM KB", "---"),
-            ("RAM %", "---"),
-            ("V-RAM KB", "---"),
-            ("V-RAM %", "---"),
-            ("PAGES LOADED", "---"),
-            ("PAGES UNLOADED", "---"),
-            ("Thrashing", "---"),
-            ("Fragmentación", "---")
-        ]
-
-        self.stats_vars = {}
-
-        for i, (text, default) in enumerate(rows):
-            tk.Label(frame, text=text, bg="white").grid(row=i, column=0, sticky="w")
-            var = tk.StringVar(value=default)
-            self.stats_vars[text] = var
-            lbl = tk.Label(frame, textvariable=var, bg="white")
-            lbl.grid(row=i, column=1, sticky="w")
-
-            if text == "Thrashing":
-                lbl.configure(fg="red", font=("Arial", 10, "bold"))
-
         return frame
 
-    def insert_page_row(self, table, row_data: dict):
-        values = (
-            row_data["page_id"],
-            row_data["pid"],
-            "X" if row_data["loaded"] else "",
-            row_data["l_addr"],
-            row_data["m_addr"],
-            row_data["d_addr"],
-            f"{row_data['loaded_t']}s" if row_data["loaded_t"] else "",
-            row_data["mark"]
-        )
-        table.insert("", "end", values=values)
+    def _create_statistics_block(self, parent, label):
+        container = tk.Frame(parent, bg="#C0C0C0")
+
+        table1 = tk.Frame(container, bg="white", relief="solid", bd=1)
+        for i, text in enumerate(["Processes", "Sim-Time"]):
+            tk.Label(table1, text=text, bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=i)
+            tk.Label(table1, text="", bg="white", borderwidth=1, relief="solid", width=20).grid(row=1, column=i)
+        table1.pack(pady=2)
+
+        table2 = tk.Frame(container, bg="white", relief="solid", bd=1)
+        for i, text in enumerate(["RAM KB", "RAM %", "V-RAM KB", "V-RAM %"]):
+            tk.Label(table2, text=text, bg="white", borderwidth=1, relief="solid", width=15).grid(row=0, column=i)
+            tk.Label(table2, text="", bg="white", borderwidth=1, relief="solid", width=15).grid(row=1, column=i)
+        table2.pack(pady=2)
+
+        table3 = tk.Frame(container, bg="white", relief="solid", bd=1)
+        tk.Label(table3, text="PAGES", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=0, columnspan=2)
+        tk.Label(table3, text="LOADED", bg="white", borderwidth=1, relief="solid", width=10).grid(row=1, column=0)
+        tk.Label(table3, text="UNLOADED", bg="white", borderwidth=1, relief="solid", width=10).grid(row=1, column=1)
+        tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10).grid(row=2, column=0)
+        tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10).grid(row=2, column=1)
+        tk.Label(table3, text="Thrashing", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=2, columnspan=2)
+        tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10).grid(row=1, column=2)
+        tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10).grid(row=1, column=3)
+        tk.Label(table3, text="Fragmentación", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=4, rowspan=2)
+        tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=20).grid(row=2, column=4)
+        table3.pack(pady=2)
+
+        return container
 
     def run(self):
         self.root.mainloop()
-
-    run()
-
-    """
-    def showRAM(self):
-        pass
-
-    def showMMU(self):
-        pass
-
-    def showProcesses(self):
-        pass
-
-    def showStatistics(self):
-        pass
-    """

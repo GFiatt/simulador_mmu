@@ -7,8 +7,11 @@ class Type(Enum):
     KILL = "kill"
 
 class Instruction:
-    def __init__(self, tipo: Type, pid: int, ptr: int = None, size: int = None):
+    def __init__(self, tipo: Type, pid=None, ptr=None, size=None):
         self.tipo = tipo
         self.pid = pid
         self.ptr = ptr
         self.size = size
+
+    def __str__(self):
+        return f"{self.tipo} - pid: {self.pid}, ptr: {self.ptr}, size: {self.size}"
