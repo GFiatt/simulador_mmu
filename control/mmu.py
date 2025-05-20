@@ -17,8 +17,8 @@ class MMU:
 
     def get_next_l_address(self):
         ptr = self.next_ptr
-        # self.next_ptr += 1
-        self.next_ptr += 4 * 1024 
+        self.next_ptr += 1
+        #self.next_ptr += 4 * 1024 
         return ptr
     
     def get_next_page_id(self):

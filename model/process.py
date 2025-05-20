@@ -25,3 +25,6 @@ class Process:
 
     def __str__(self):
         return f"Process ID: {self.pid}, Symbol Table: {self.symbolTable}"
+    
+    def __repr__(self):
+        return self.__str__()

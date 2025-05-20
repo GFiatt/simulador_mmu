@@ -7,6 +7,23 @@ from control.instruction import Instruction, Type
 from control.computer import Computer
 import tkinter.font as font
 
+colors = [
+    "#ADD8E6", "#AFEEEE", "#B0E0E6", "#B0E57C", "#B2FF66", "#B3FFB3", "#B4F8C8", "#B5EAD7",
+    "#B6FFFA", "#B9FBC0", "#BAF2E9", "#BBE2EC", "#BBFF99", "#BDFCC9", "#BEFFF7", "#C0FDFB",
+    "#C1F0F6", "#C2F9BB", "#C3FDB8", "#C4FAF8", "#C5E384", "#C6FFDD", "#C7F9E5", "#C8E6C9",
+    "#C9FFE5", "#CAEFD1", "#CBFF99", "#CCE5FF", "#CCFFCC", "#CCFFDD", "#CDFFEB", "#CEFFF9",
+    "#CFFFE5", "#D0F0C0", "#D1FFBD", "#D2F5E3", "#D3FFCE", "#D4F1F4", "#D5FFD9", "#D6F5D6",
+    "#D7F9F1", "#D8FCF8", "#D9FFFC", "#DAF7A6", "#DBFFEA", "#DCFFEF", "#DDFFCC", "#DEFFF2",
+    "#DFFFFF", "#E0FFFF", "#E1FFB1", "#E2F0CB", "#E3F9E5", "#E4FFE1", "#E5FFCC", "#E6FFFA",
+    "#E7FFDB", "#E8F6EF", "#E9FFE1", "#EAFFF4", "#EBFFFA", "#ECFFDC", "#EDFFF5", "#EEFFEB",
+    "#EFFFE0", "#F0FFF0", "#F1FFEB", "#F2FFE8", "#F3F9D2", "#F4FFED", "#F5FFFA", "#F6FDC3",
+    "#F7FFE2", "#F8FBAF", "#F9FFE5", "#FAFAD2", "#FBFFE2", "#FCF7BB", "#FDFFB6", "#FEF9E7",
+    "#FFB6C1", "#FFC0CB", "#FFDAB9", "#FFE0B2", "#FFE4B5", "#FFE4E1", "#FFECB3", "#FFEFD5",
+    "#FFF0F5", "#FFF5E1", "#FFF8DC", "#FFF9C4", "#FFFACD", "#FFFBCC", "#FFFCF5", "#FFFDFA",
+    "#FFFEF0", "#FFFFCC", "#FFFFE0", "#FFFFF0", "#FFFFF5", "#FFFFF7"
+]
+  
+
 class UI:
     def __init__(self):
         self.root = tk.Tk()
@@ -168,7 +185,7 @@ class UI:
                 self.instructions.append(f"new({pid},{random.randint(50, 1000)})")
                 table.append(len(table) + 1)
             else:
-                op_type = random.choices(["use", "delete", "new", "kill"], weights=[40, 20, 30, 10])[0]
+                op_type = random.choices(["use", "delete", "new", "kill"], weights=[40, 10, 35, 5])[0]
                 if op_type == "new":
                     self.instructions.append(f"new({pid},{random.randint(50, 1000)})")
                     table.append(len(table) + 1)
@@ -255,6 +272,28 @@ class UI:
         for col in tree["columns"]:
             tree.heading(col, text=col)
             tree.column(col, width=80, anchor="center")
+        for i, process in enumerate(self.computer.process_table):
+            color = colors[i % len(colors)]
+            tag_name = f"process_{process.pid}"
+            tree.tag_configure(tag_name, background=color)
+
+            for page_list in process.symbolTable.values():
+                for page in page_list:
+                    tree.insert(
+                        "", "end",
+                        values=(
+                            page.pageID,
+                            process.pid,
+                            page.loaded,
+                            page.L_Addr,
+                            page.M_Addr,
+                            page.D_Addr,
+                            getattr(page, "loaded_t", ""),
+                            getattr(page, "mark", ""),
+                        ),
+                        tags=(tag_name,)  # Esto aplica el color configurado
+                    )
+
         scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
         tree.grid(row=0, column=0)
@@ -288,6 +327,11 @@ class UI:
         tk.Label(table3, text="Fragmentación", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=4, rowspan=2)
         tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=20).grid(row=2, column=4)
         table3.pack(pady=2)
+
+        #Adding info
+        process_count = self.computer.get_process_count() if self.computer else 0
+        tk.Label(table1, text=str(process_count), bg="white", borderwidth=1, relief="solid", width=20).grid(row=1, column=0)
+        
 
         return container
 

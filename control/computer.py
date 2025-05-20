@@ -20,11 +20,16 @@ class Computer:
             if process.pid == pid:
                 return process
         return None
+    
+    def get_process_count(self):
+        return len(self.process_table)
 
     def run(self):
         """
         Carga la sesión y ejecuta las instrucciones.
         """
+        
+
         for instruction in self.session:
             if instruction.tipo == Type.NEW:
                 process = self.get_process_by_pid(instruction.pid)
@@ -56,3 +61,6 @@ class Computer:
                 process = self.get_process_by_pid(instruction.pid)
                 if process is not None:
                     self.process_table.remove(process)
+
+
+        print("PROCESOS EN LA COMPU",self.process_table)
