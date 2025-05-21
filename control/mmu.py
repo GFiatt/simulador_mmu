@@ -14,6 +14,7 @@ class MMU:
         self.pages = [] # Reguero de paginas
         self.memory = deque() # memory (T)
         self.clock = 0
+        self.time = 0 #hits + faults
         self.hits = 0
         self.faults = 0
         self.maxFrames = 100
@@ -102,7 +103,7 @@ class MMU:
             #     page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=True, loaded_t=self.clock)
             #     self.memory.append(page)
             # else:
-            page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=False, loaded_t=self.clock)
+            page = Page(page_id, process.pid, l_addr, l_addr, '', loaded=False, loaded_t=self.clock)
 
             # size <= 4*1024
             if num_pages == 1:
@@ -121,6 +122,43 @@ class MMU:
         process.new(ptr, process_pages)
         return ptr, process
 
+    def update_memory(self):
+        # Reflejar disco
+        for page in self.pages:
+            page.loaded = False
+            page.loaded_t = ''
+            page.M_Addr = ''
+            page.D_Addr = self.pages.index(page)
+
+        # Actualizar pages con memory
+        for idx, page in enumerate(self.memory):
+            page.M_Addr = idx
+            for p in self.pages:
+                if p.pageID == page.pageID:
+                    p.loaded = True
+                    p.loaded_t = self.clock
+                    p.M_Addr = idx
+                    p.D_Addr = ''
+                    break
+
+    def mark_page_loaded(self, page):
+        for p in self.pages:
+            if p.pageID == page.pageID:
+                p.loaded = True
+                p.loaded_t = self.clock
+                p.M_Addr = self.memory.index(page)
+                p.D_Addr = ''
+                break
+
+    def mark_page_unloaded(self, page):
+        for p in self.pages:
+            if p.pageID == page.pageID:
+                p.loaded = False
+                p.loaded_t = None
+                p.M_Addr = None
+                p.D_Addr = self.pages.index(p)
+                break
+
     def new(self, process: Process, size):
         process_ptr, process = self.create_pages(process, size)
         for page in process.symbolTable[process_ptr]:
@@ -130,49 +168,45 @@ class MMU:
                 self.memory.append(page)
                 self.faults += 1
             else:
-                print(f"MMU: No hay suficiente memoria para el proceso {process.pid}, aplicando reemplazo")
+                #print(f"MMU: No hay suficiente memoria para el proceso {process.pid}, aplicando reemplazo")
                 self.memory, self.hits, self.faults, _, removed = self.algorithm.replace(
-                    deque([page]), self.memory, faults=self.faults, frameSize=self.maxFrames
+                    deque([page]), self.memory, hits = self.hits, faults=self.faults, frameSize=self.maxFrames
                 )
+                self.time = self.hits + (self.faults*5)
                 if removed:
-                    for p in self.pages:
-                        if p.pageID == removed.pageID:
-                            p.loaded = False
-                            p.loaded_t = None
-                            break
-                page.loaded = True
+                    self.mark_page_unloaded(removed)
+
+                self.mark_page_loaded(page)
+                self.update_memory()
 
         return process
-
-    def use(self, ptr: int):
-        # Revisar las paginas fragmentadas
-        #print(f"MMU: use {ptr}")
-        """
-            new 
-                no hay memoria
-                     proceso -> pags
-                     algoritmo(memory(T), pag) -> memory, faults, hits
-
-            use
-        
-        """
-        pass
 
     def get_process_by_ptr(self, ptr: int): 
         for page in self.pages:
             if page.L_Addr == ptr:
                 return page.processID
         return None 
+    
+    def use(self, process, ptr: int):
+        if ptr not in process.symbolTable:
+            print(f"[ERROR] Ptr -> {ptr} does not exists in PID={process.pid}")
+            return
+        for page in process.symbolTable[ptr]:
+            self.memory, self.hits, self.faults, _, removed = self.algorithm.replace(
+                    deque([page]), self.memory, hits = self.hits, faults=self.faults, frameSize=self.maxFrames
+                )
+            self.time = self.hits + (self.faults*5)
+            if removed:
+                self.mark_page_unloaded(removed)
+
+            self.mark_page_loaded(page)
+            self.update_memory()
 
     def delete(self,process ,ptr: int):
-        #print(f"MMU: delete {ptr}")
-        #print(f"MMU CURRENT PROCESS PAGES: {process.symbolTable} \n")
         pages_to_remove = process.symbolTable.get(ptr, [])
         for page in pages_to_remove:
             self.pages.remove(page)
         process.delete(ptr)
-        #print(f"MMU NEW CURRENT PROCESS PAGES: {process.symbolTable} \n")
-        #print(f"MMU CURRENT PAGES: {self.pages} \n")
         return process
         
     def kill(self, pid: int):

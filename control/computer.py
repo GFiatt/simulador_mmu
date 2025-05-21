@@ -53,7 +53,9 @@ class Computer:
                     print(f"No se pudo crear el proceso {pid} (sin memoria) \nAgregando pagina en  disco..." )
 
             elif instruction.tipo == Type.USE:
-                self.mmu.use(instruction)
+                pid = self.mmu.get_process_by_ptr(instruction.ptr)
+                process = self.get_process_by_pid(pid)
+                self.mmu.use(process,instruction.ptr)
 
             elif instruction.tipo == Type.DELETE:
                 pid = self.mmu.get_process_by_ptr(instruction.ptr)
@@ -68,6 +70,41 @@ class Computer:
                 process = self.get_process_by_pid(instruction.pid)
                 if process is not None:
                     self.process_table.remove(process)
+
+
+    def run_single_instruction(self, instruction):
+ 
+        if instruction.tipo == Type.NEW:
+            process = self.get_process_by_pid(instruction.pid)
+            if process is None:
+                process = self.mmu.new(Process(instruction.pid), instruction.size)
+            else:
+                self.process_table.remove(process)
+                process = self.mmu.new(process, instruction.size)
+            if process:
+                self.process_table.append(process)
+
+        elif instruction.tipo == Type.USE:
+                pid = self.mmu.get_process_by_ptr(instruction.ptr)
+                process = self.get_process_by_pid(pid)
+                if process is not None:
+                    self.mmu.use(process, instruction.ptr)
+                else:
+                    print(f"Process does not exists.")
+                
+        elif instruction.tipo == Type.DELETE:
+            pid = self.mmu.get_process_by_ptr(instruction.ptr)
+            process = self.get_process_by_pid(pid)
+            if process:
+                self.process_table.remove(process)
+                process = self.mmu.delete(process, instruction.ptr)
+                self.process_table.append(process)
+
+        elif instruction.tipo == Type.KILL:
+            self.mmu.kill(instruction.pid)
+            process = self.get_process_by_pid(instruction.pid)
+            if process:
+                self.process_table.remove(process)
 
 
         #print("PROCESOS EN LA COMPU",self.process_table)

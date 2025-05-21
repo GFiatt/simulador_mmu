@@ -22,7 +22,7 @@ class FIFO:
         # If the page is already in memory, count as hit
         if current in memory:
             hits += 1
-            return memory, hits, faults, pages
+            return memory, hits, faults, pages, None
 
         # If the memory is not full, add the page
         faults += 1  # Count as fault
