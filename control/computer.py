@@ -17,6 +17,26 @@ class Computer:
         self.page_size_kb = 4
         self.mmu = MMU(algorithm)
 
+        if isinstance(self.mmu.algorithm, OPT):
+            self.prepare_all_pages_for_opt()
+
+    def prepare_all_pages_for_opt(self):
+        if isinstance(self.mmu.algorithm, OPT):
+            all_pages = []
+            for instruction in self.session:
+                if instruction.tipo == Type.NEW:
+                    temp_process = Process(instruction.pid)
+                    created_process = self.mmu.create_pages(temp_process, instruction.size, add_to_memory=False)
+
+                    # Extraer las listas de páginas desde el symbolTable
+                    for page_list in created_process.symbolTable.values():
+                        all_pages.extend(page_list)
+
+            self.mmu.algorithm.allPages = all_pages
+            print(f"[OPT] Total páginas precargadas: {len(all_pages)}")
+
+
+
     def get_process_by_pid(self, pid):
         for process in self.process_table:
             if process.pid == pid:
@@ -71,3 +91,6 @@ class Computer:
 
 
         #print("PROCESOS EN LA COMPU",self.process_table)
+        print(f"[DEBUG] Algoritmo usado: {type(self.mmu.algorithm)}")
+        print(f"[DEBUG] Páginas en MMU: {len(self.mmu.pages)}")
+        print(f"[DEBUG] Tiene allPages? {'allPages' in dir(self.mmu.algorithm)}")
