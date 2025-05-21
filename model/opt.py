@@ -1,8 +1,8 @@
 class OPT():
 
-    def run(pages, frameSize=100):
-        fault = 0
-        queue = []
+    def run(self, pages, memory, allPages, frameSize=100): # pages = [1, 2, 3, 4, 5] - en lista de espera a memoria
+        fault = 0 
+        hits = 0 
         for current, p in enumerate(pages):
             # La pagina esta en memoria
             if p in queue:
@@ -15,7 +15,7 @@ class OPT():
             # Todavia hay espacio en memoria
             if len(queue) < frameSize:
                 queue.append(p)
-            # Ya no hay espacio en memoeria
+            # Ya no hay espacio en memoria
             elif len(queue) == frameSize:
                 # Calcular uso futuro de cada página en memoria
                 future = {}
@@ -46,9 +46,9 @@ class OPT():
                 queue.remove(victim)
                 queue.append(p)
                 
-            print("Este es el queue: ", queue)
-            print("Este es el pages: ", pages)
-            print(f"El faul es: {fault}")
+            print("Este es el queue: ", queue) #queue = [7]
+            print("Este es el pages: ", pages) #pages = [7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1]
+            print(f"El fault es: {fault}")      #fault = 1
         pages = queue
         return fault, pages
                     
