@@ -15,7 +15,7 @@ class Computer:
         self.disk_size = float('inf')
         self.disk = []
         self.page_size_kb = 4
-        self.mmu = MMU(OPT)
+        self.mmu = MMU(algorithm)
 
     def get_process_by_pid(self, pid):
         for process in self.process_table:

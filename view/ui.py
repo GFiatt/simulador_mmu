@@ -111,6 +111,8 @@ class UI:
             self._generate_instructions()
 
         self.computer = Computer(session=self.instruction_objects, algorithm=self.selected_algorithm)
+        self.computer.mmu.set_algorithm()
+        print(f"Algoritmo seleccionado: {self.computer.mmu.algorithm.__class__.__name__}")
         self.computer.run()
         self.mmu = self.computer.mmu
 
