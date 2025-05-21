@@ -11,7 +11,9 @@ class Computer:
         self.instructions_per_second = 1
         self.disk_access_time = 5
         self.ram_size_kb = 400
+        self.used_ram = 0
         self.disk_size = float('inf')
+        self.disk = []
         self.page_size_kb = 4
         self.mmu = MMU(OPT)
 
@@ -23,13 +25,14 @@ class Computer:
     
     def get_process_count(self):
         return len(self.process_table)
+    
+    
 
     def run(self):
         """
         Carga la sesión y ejecuta las instrucciones.
         """
         
-
         for instruction in self.session:
             if instruction.tipo == Type.NEW:
                 process = self.get_process_by_pid(instruction.pid)
@@ -37,13 +40,17 @@ class Computer:
                 # No existe el proceso
                 if process is None:
                     process = self.mmu.new(Process(instruction.pid), instruction.size)
-
                 # Existe el proceso
                 else:
                     self.process_table.remove(process)
                     process = self.mmu.new(process, instruction.size)
-
-                self.process_table.append(process)
+    
+                if process:
+                    self.process_table.append(process)
+                else:
+                    process_disk = self.mmu.create_pages(Process(instruction.pid), instruction.size, add_to_memory=False)
+                    self.process_table.append(process_disk)
+                    print(f"No se pudo crear el proceso {pid} (sin memoria) \nAgregando pagina en  disco..." )
 
             elif instruction.tipo == Type.USE:
                 self.mmu.use(instruction)
@@ -63,4 +70,4 @@ class Computer:
                     self.process_table.remove(process)
 
 
-        print("PROCESOS EN LA COMPU",self.process_table)
+        #print("PROCESOS EN LA COMPU",self.process_table)

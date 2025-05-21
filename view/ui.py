@@ -266,6 +266,35 @@ class UI:
             canvas.create_text(x + 9, 12, text="", font=("MS Sans Serif", 6))
             x += 20
 
+            pages_in_ram = []
+        x = 5
+        box_width = 18
+        box_height = 15
+        spacing = 2
+
+        for i, process in enumerate(self.computer.process_table):
+            color = colors[i % len(colors)]
+            for page_list in process.symbolTable.values():
+                for page in page_list:
+                    if page.loaded:
+                        pages_in_ram.append((page, color))
+
+
+        for i, (page, color) in enumerate(pages_in_ram[:100]):
+            canvas.create_rectangle(
+                x, 5,
+                x + box_width, 5 + box_height,
+                fill=color,
+                outline="black"
+            )
+
+            canvas.create_text(
+                x + box_width // 2, 5 + box_height // 2,
+                text=str(page.pageID),
+                font=("MS Sans Serif", 6)
+            )
+            x += box_width + spacing
+
     def _create_table_with_scroll(self, parent, title):
         frame = tk.LabelFrame(parent, text=title, bg="#C0C0C0")
         tree = ttk.Treeview(frame, columns=("PAGE ID", "PID", "LOADED", "L-ADDR", "M-ADDR", "D-ADDR", "LOADED-T", "MARK"), show="headings", height=15)
@@ -332,6 +361,24 @@ class UI:
         process_count = self.computer.get_process_count() if self.computer else 0
         tk.Label(table1, text=str(process_count), bg="white", borderwidth=1, relief="solid", width=20).grid(row=1, column=0)
         
+        fragmentation_count = self.computer.mmu.calc_fragmentation() 
+        total_ram_bytes = 400 * 1024  # 400 KB = 409600 B
+        fragmentation_percentage = (fragmentation_count / total_ram_bytes) * 100 if total_ram_bytes else 0
+        bg_color = "red" if fragmentation_count > total_ram_bytes / 2 else "white"
+        fragmentation_text = f"{fragmentation_count} B ({fragmentation_percentage:.1f}%)"
+        tk.Label(table3, text=fragmentation_text, bg=bg_color, borderwidth=1, relief="solid", width=20).grid(row=2, column=4)
+
+        loaded_pages = self.computer.mmu.count_loaded_pages() if self.computer else 0
+        not_loaded_pages = self.computer.mmu.count_not_loaded_pages() if self.computer else 0
+
+        tk.Label(table3, text=str(loaded_pages), bg="white", borderwidth=1, relief="solid", width=10).grid(row=2, column=0)
+        tk.Label(table3, text=str(not_loaded_pages), bg="white", borderwidth=1, relief="solid", width=10).grid(row=2, column=1)
+
+
+        ram_kb, ram_percent = self.computer.mmu.get_ram_usage(self.computer.ram_size_kb)
+        tk.Label(table2, text=f"{ram_kb:.1f} KB", bg="white", borderwidth=1, relief="solid", width=15).grid(row=1, column=0)
+        tk.Label(table2, text=f"{ram_percent:.1f} %", bg="white", borderwidth=1, relief="solid", width=15).grid(row=1, column=1)
+
 
         return container
 
