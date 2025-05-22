@@ -26,7 +26,7 @@ class Computer:
             for instruction in self.session:
                 if instruction.tipo == Type.NEW:
                     temp_process = Process(instruction.pid)
-                    created_process = self.mmu.create_pages(temp_process, instruction.size, add_to_memory=False)
+                    _, created_process = self.mmu.create_pages(temp_process, instruction.size, add_to_memory=False)
 
                     # Extraer las listas de páginas desde el symbolTable
                     for page_list in created_process.symbolTable.values():
