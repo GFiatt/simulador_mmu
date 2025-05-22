@@ -1,5 +1,3 @@
-from model.algorithm import Algorithm
-
-class MRU(Algorithm):
-    def replace(self, pages: list):
+class MRU():
+    def replace(pages, memory, hits=0, faults=0, frameSize=100):
         pass
