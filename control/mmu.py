@@ -4,7 +4,7 @@ from model.page import Page
 from model.fifo import FIFO
 from model.secondChance import SecondChance
 from model.mru import MRU
-from model.random import Random
+from model.rnd import Random
 from model.opt import OPT
 
 import time

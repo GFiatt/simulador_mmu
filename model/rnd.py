@@ -1,49 +1,38 @@
 from collections import deque
+import random
 from page import Page
 
-class MRU():
+class rnd():
     @staticmethod
     def replace(pages, memory, hits=0, faults=0, frameSize=100):
-        # pages [p1, p2, p3,..., p1] 
-        # current = p1 <- refBit = 1
-        # memory [p1, p8, p7,...]
         """
-        Algoritmo MRU (Most Recently Used).
-        pages   : deque con las páginas restantes por atender (se modifica in-place).
-        memory  : deque con las páginas en memoria.
-        hits    : contador de aciertos.
-        faults  : contador de fallos.
-        frameSize: tamaño máximo de la memoria.
+        Algoritmo Random: al fallar, reemplaza un marco elegido al azar.
+        :param pages:  deque de páginas pendientes (se modifica in-place)
+        :param memory: deque con las páginas cargadas
+        :param frameSize: tamaño de la memoria
+        :param hits: contador de hits
+        :param faults: contador de faults
+        :return: memory, hits, faults
         """
         removed = None
-        
-        # Get the first page in the pages list
-        current = pages.popleft()    
-        
-        # Check if the page is already in memory
-        # If the page is already in memory, count as hit
+
+        current = pages.popleft()            # página referenciada ahora
+
         if current in memory:
             hits += 1
-            memory.remove(current)  # Remove the page from its current position
-            memory.append(current)  # Add it to the end of the queue
             return memory, hits, faults, pages, removed
 
-        # If the memory is not full, add the page
-        faults += 1  # Count as fault
-
-        if len(memory) >= frameSize:
-            # Memory is full, need to remove the most recently used page
-            removed = memory.pop()
+        faults += 1
+        if len(memory) < frameSize:          # aún hay hueco
             memory.append(current)
-        else:
-            # Memory is not full, just add the new page
-            memory.append(current)
+        else:                                # memoria llena → víctima aleatoria
+            idx = random.randint(0, frameSize - 1)  # índice aleatorio
+            removed = memory[idx]
+            memory[idx] = current
 
-        # Return the updated memory, hits, faults, pages, and removed page
         return memory, hits, faults, pages, removed
     
-
-    # -------- Quick test ----------
+# -------- Quick test ----------
 # Crear instancias de páginas para la prueba
 p0 = Page(page_id=0, process_id=1, l_addr=0, m_addr=0, d_addr=0)
 p1 = Page(page_id=1, process_id=1, l_addr=0, m_addr=0, d_addr=0)
@@ -71,7 +60,7 @@ while pages:
     current_page = pages[0]
 
     # Ejecutar el algoritmo FIFO
-    memory, hits, faults, _, removed = MRU.replace(pages, memory, hits, faults, frameSize)
+    memory, hits, faults, _, removed = rnd.replace(pages, memory, hits, faults, frameSize)
     
     # Mostrar resultados del paso actual
     mem_ids = [page.pageID for page in memory]
