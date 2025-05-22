@@ -1,6 +1,4 @@
 from collections import deque
-from page import Page
-
 class OPT():
     def __init__(self, allPages=[]): 
         self.allPages = allPages
