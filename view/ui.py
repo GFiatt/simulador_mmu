@@ -573,7 +573,7 @@ class UI:
                                 page.M_Addr,
                                 page.D_Addr,
                                 getattr(page, "loaded_t", ""),
-                                getattr(page, "mark", ""),
+                                getattr(page, "refBit", ""),
                             ),
                             tags=(tag_name,)
                         )
@@ -596,7 +596,7 @@ class UI:
                                 page.M_Addr,
                                 page.D_Addr,
                                 getattr(page, "loaded_t", ""),
-                                getattr(page, "mark", ""),
+                                getattr(page, "refBit", ""),
                             ),
                             tags=(tag_name,)
                         )
