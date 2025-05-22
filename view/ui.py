@@ -3,8 +3,10 @@ from tkinter import ttk, filedialog, messagebox
 import random
 import os
 import re
+import threading
 from control.instruction import Instruction, Type
 from control.computer import Computer
+from model.opt import OPT
 import tkinter.font as font
 
 colors = [
@@ -22,7 +24,6 @@ colors = [
     "#FFF0F5", "#FFF5E1", "#FFF8DC", "#FFF9C4", "#FFFACD", "#FFFBCC", "#FFFCF5", "#FFFDFA",
     "#FFFEF0", "#FFFFCC", "#FFFFE0", "#FFFFF0", "#FFFFF5", "#FFFFF7"
 ]
-  
 
 class UI:
     def __init__(self):
@@ -37,16 +38,16 @@ class UI:
 
         self.instructions = []
         self.instruction_objects = []
-        self.computer = None
-        self.mmu = None
+        self.computer_opt = None
+        self.computer_alg = None
 
         self.simulation_index = 0
         self.simulation_delay = 100  # milisegundos
-        self.simulation_running = True  
-
-
+        self.simulation_running = True
 
         self._init_config_screen()
+
+
 
     def _init_config_screen(self):
         self._clear_window()
@@ -119,12 +120,15 @@ class UI:
         self.computer = Computer(session=self.instruction_objects, algorithm=self.selected_algorithm)
         self.computer.mmu.set_algorithm()
         self.computer.prepare_all_pages_for_opt()
-        #print(f"Algoritmo seleccionado: {self.computer.mmu.algorithm.__class__.__name__}")
-        #self.computer.run()
-        self.mmu = self.computer.mmu
+
+        self.opt_computer = Computer(session=self.instruction_objects, algorithm=OPT())
+        self.opt_computer.prepare_all_pages_for_opt()
+
 
         self._build_layout()
-        self._update_statistics()
+        self._update_statistics(self.computer)
+        self._update_statistics(self.opt_computer, is_opt=True)
+
         self.simulation_index = 0
         self._run_next_instruction()
 
@@ -135,13 +139,19 @@ class UI:
 
         if self.simulation_index < len(self.computer.session):
             instruction = self.computer.session[self.simulation_index]
-            self.computer.run_single_instruction(instruction)
-            #self.opt_computer.run_single_instruction(instruction)
 
-            # Redibujar UI
+            # Ejecutar instrucción en ambas computadoras
+            self.computer.run_single_instruction(instruction)
+            self.opt_computer.run_single_instruction(instruction)
+
+            # Redibujar ambas memorias RAM
             self._draw_ram_canvas(self.canvas_alg, self.computer)
-            #self._draw_ram_canvas(self.canvas_opt, self.opt_computer)
-            self._update_statistics()
+            self._draw_ram_canvas(self.canvas_opt, self.opt_computer)
+
+            # Actualizar estadísticas de ambas simulaciones
+            self._update_statistics(self.computer)
+            self._update_statistics(self.opt_computer, is_opt=True)
+
 
             self.simulation_index += 1
             self.root.after(self.simulation_delay, self._run_next_instruction)
@@ -276,14 +286,16 @@ class UI:
         self.canvas_alg = tk.Canvas(top_frame, height=50, width=2000, bg="white", relief="sunken", bd=2)
         self.canvas_alg.pack()
 
-        self._draw_ram_canvas(self.canvas_opt, [])
-        self._draw_ram_canvas(self.canvas_alg, [])
+        self._draw_ram_canvas(self.canvas_opt, self.opt_computer)
+        self._draw_ram_canvas(self.canvas_alg, self.computer)
+
+
 
         # ---------- MIDDLE ----------
         self.middle_frame = tk.Frame(self.root, bg="#C0C0C0")
         self.middle_frame.pack(pady=10, fill="x")
 
-        self.opt_table = self._create_table_with_scroll(self.middle_frame, "MMU - OPT")
+        self.opt_table = self._create_table_with_scroll(self.middle_frame, "MMU - OPT", is_opt=True)
         self.opt_table.pack(side="left", padx=10)
 
         self.table_frame = self._create_table_with_scroll(self.middle_frame, f"MMU - [{self.selected_algorithm}]")
@@ -293,7 +305,7 @@ class UI:
         self.bottom_frame = tk.Frame(self.root, bg="#C0C0C0")
         self.bottom_frame.pack(pady=10, fill="x")
 
-        self.opt_statistics = self._create_statistics_block(self.bottom_frame, "OPT")
+        self.opt_statistics = self._create_statistics_block(self.bottom_frame, "OPT", is_opt=True)
         self.opt_statistics.pack(side="left", padx=40)
 
         self.statistics_frame = self._create_statistics_block(self.bottom_frame, self.selected_algorithm)
@@ -318,7 +330,7 @@ class UI:
         self.simulation_running = True
         self._init_config_screen()
 
-    def _draw_ram_canvas(self, canvas, pages=None):
+    def _draw_ram_canvas(self, canvas, computer):
         canvas.delete("all")
 
         total_blocks = 100
@@ -329,20 +341,16 @@ class UI:
         start_x = 5
         start_y = 5
 
-        # --- DIBUJAR CUADRITOS BASE (vacíos, grises) ---
         for i in range(total_blocks):
             row = i // blocks_per_row
             col = i % blocks_per_row
             x = start_x + col * (box_width + spacing)
             y = start_y + row * (box_height + spacing)
-
             canvas.create_rectangle(x, y, x + box_width, y + box_height, fill="gray", outline="black")
             canvas.create_text(x + box_width // 2, y + box_height // 2, text="", font=("MS Sans Serif", 6))
 
-        # --- DIBUJAR PÁGINAS CARGADAS ---
         pages_in_ram = []
-
-        for i, process in enumerate(self.computer.process_table):
+        for i, process in enumerate(computer.process_table):
             color = colors[i % len(colors)]
             for page_list in process.symbolTable.values():
                 for page in page_list:
@@ -358,153 +366,201 @@ class UI:
             canvas.create_rectangle(x, y, x + box_width, y + box_height, fill=color, outline="black")
             canvas.create_text(x + box_width // 2, y + box_height // 2, text=str(page.pageID), font=("MS Sans Serif", 6))
 
-    def _create_table_with_scroll(self, parent, title):
+    def _create_table_with_scroll(self, parent, title, is_opt=False):
         frame = tk.LabelFrame(parent, text=title, bg="#C0C0C0")
         
-        self.treeview = ttk.Treeview(
+        tree = ttk.Treeview(
             frame,
             columns=("PAGE ID", "PID", "LOADED", "L-ADDR", "M-ADDR", "D-ADDR", "LOADED-T", "MARK"),
             show="headings",
             height=15
         )
 
-        for col in self.treeview["columns"]:
-            self.treeview.heading(col, text=col)
-            self.treeview.column(col, width=80, anchor="center")
+        for col in tree["columns"]:
+            tree.heading(col, text=col)
+            tree.column(col, width=80, anchor="center")
 
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=self.treeview.yview)
-        self.treeview.configure(yscrollcommand=scrollbar.set)
-        self.treeview.grid(row=0, column=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.grid(row=0, column=0)
         scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Guardar referencia
+        if is_opt:
+            self.treeview_opt = tree
+        else:
+            self.treeview = tree
 
         return frame
 
-    def _create_statistics_block(self, parent, label):
+
+    def _create_statistics_block(self, parent, label, is_opt=False):
         container = tk.Frame(parent, bg="#C0C0C0")
 
-        # -------- TABLE 1: Processes & Sim-Time --------
+        # TABLE 1: Processes & Sim-Time
         table1 = tk.Frame(container, bg="white", relief="solid", bd=1)
         for i, text in enumerate(["Processes", "Sim-Time"]):
             tk.Label(table1, text=text, bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=i)
 
-        self.process_count_label = tk.Label(table1, text="0", bg="white", borderwidth=1, relief="solid", width=20)
-        self.process_count_label.grid(row=1, column=0)
+        proc_label = tk.Label(table1, text="0", bg="white", borderwidth=1, relief="solid", width=20)
+        proc_label.grid(row=1, column=0)
 
-        sim_time_label = tk.Label(table1, text="0", bg="white", borderwidth=1, relief="solid", width=20)
-        sim_time_label.grid(row=1, column=1)
+        sim_label = tk.Label(table1, text="0", bg="white", borderwidth=1, relief="solid", width=20)
+        sim_label.grid(row=1, column=1)
 
-        if label == "OPT":
-            self.sim_time_label_opt = sim_time_label
+        if is_opt:
+            self.process_count_label_opt = proc_label
+            self.sim_time_label_opt = sim_label
         else:
-            self.sim_time_label_alg = sim_time_label
-
-
+            self.process_count_label = proc_label
+            self.sim_time_label_alg = sim_label
 
         table1.pack(pady=2)
 
-        # -------- TABLE 2: RAM & V-RAM --------
+        # TABLE 2: RAM & V-RAM
         table2 = tk.Frame(container, bg="white", relief="solid", bd=1)
         for i, text in enumerate(["RAM KB", "RAM %", "V-RAM KB", "V-RAM %"]):
             tk.Label(table2, text=text, bg="white", borderwidth=1, relief="solid", width=15).grid(row=0, column=i)
 
-        self.ram_kb_label = tk.Label(table2, text="0", bg="white", borderwidth=1, relief="solid", width=15)
-        self.ram_kb_label.grid(row=1, column=0)
+        ram_kb = tk.Label(table2, text="0", bg="white", borderwidth=1, relief="solid", width=15)
+        ram_kb.grid(row=1, column=0)
+        ram_pct = tk.Label(table2, text="0%", bg="white", borderwidth=1, relief="solid", width=15)
+        ram_pct.grid(row=1, column=1)
+        vram_kb = tk.Label(table2, text="0", bg="white", borderwidth=1, relief="solid", width=15)
+        vram_kb.grid(row=1, column=2)
+        vram_pct = tk.Label(table2, text="0%", bg="white", borderwidth=1, relief="solid", width=15)
+        vram_pct.grid(row=1, column=3)
 
-        self.ram_percent_label = tk.Label(table2, text="0%", bg="white", borderwidth=1, relief="solid", width=15)
-        self.ram_percent_label.grid(row=1, column=1)
-
-        self.vram_kb_label = tk.Label(table2, text="0", bg="white", borderwidth=1, relief="solid", width=15)
-        self.vram_kb_label.grid(row=1, column=2)
-
-        self.vram_percent_label = tk.Label(table2, text="0%", bg="white", borderwidth=1, relief="solid", width=15)
-        self.vram_percent_label.grid(row=1, column=3)
+        if is_opt:
+            self.ram_kb_label_opt = ram_kb
+            self.ram_percent_label_opt = ram_pct
+            self.vram_kb_label_opt = vram_kb
+            self.vram_percent_label_opt = vram_pct
+        else:
+            self.ram_kb_label = ram_kb
+            self.ram_percent_label = ram_pct
+            self.vram_kb_label = vram_kb
+            self.vram_percent_label = vram_pct
 
         table2.pack(pady=2)
 
-        # -------- TABLE 3: Pages & Fragmentation --------
+        # TABLE 3: Pages & Fragmentation
         table3 = tk.Frame(container, bg="white", relief="solid", bd=1)
-
         tk.Label(table3, text="PAGES", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=0, columnspan=2)
         tk.Label(table3, text="LOADED", bg="white", borderwidth=1, relief="solid", width=10).grid(row=1, column=0)
         tk.Label(table3, text="UNLOADED", bg="white", borderwidth=1, relief="solid", width=10).grid(row=1, column=1)
 
-        self.loaded_pages_label = tk.Label(table3, text="0", bg="white", borderwidth=1, relief="solid", width=10)
-        self.loaded_pages_label.grid(row=2, column=0)
-
-        self.unloaded_pages_label = tk.Label(table3, text="0", bg="white", borderwidth=1, relief="solid", width=10)
-        self.unloaded_pages_label.grid(row=2, column=1)
+        loaded_label = tk.Label(table3, text="0", bg="white", borderwidth=1, relief="solid", width=10)
+        unloaded_label = tk.Label(table3, text="0", bg="white", borderwidth=1, relief="solid", width=10)
+        loaded_label.grid(row=2, column=0)
+        unloaded_label.grid(row=2, column=1)
 
         tk.Label(table3, text="Thrashing", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=2, columnspan=2)
-        self.thrashing_label_1 = tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10)
-        self.thrashing_label_1.grid(row=1, column=2)
-        self.thrashing_label_2 = tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10)
-        self.thrashing_label_2.grid(row=1, column=3)
+        thrash1 = tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10)
+        thrash2 = tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=10)
+        thrash1.grid(row=1, column=2)
+        thrash2.grid(row=1, column=3)
 
         tk.Label(table3, text="Fragmentación", bg="white", borderwidth=1, relief="solid", width=20).grid(row=0, column=4, rowspan=2)
-        self.fragmentation_label = tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=20)
-        self.fragmentation_label.grid(row=2, column=4)
+        frag_label = tk.Label(table3, text="", bg="white", borderwidth=1, relief="solid", width=20)
+        frag_label.grid(row=2, column=4)
+
+        if is_opt:
+            self.loaded_pages_label_opt = loaded_label
+            self.unloaded_pages_label_opt = unloaded_label
+            self.thrashing_label_1_opt = thrash1
+            self.thrashing_label_2_opt = thrash2
+            self.fragmentation_label_opt = frag_label
+        else:
+            self.loaded_pages_label = loaded_label
+            self.unloaded_pages_label = unloaded_label
+            self.thrashing_label_1 = thrash1
+            self.thrashing_label_2 = thrash2
+            self.fragmentation_label = frag_label
 
         table3.pack(pady=2)
-
         return container
 
-    def _update_statistics(self):
-        #print(f"[DEBUG] update_statistics() called | sim_time={self.computer.mmu.time}, faults={self.computer.mmu.faults}")
-
-        self._draw_ram_canvas(self.canvas_alg, [])
+    def _update_statistics(self, computer, is_opt=False):
+        # Seleccionar canvas y etiquetas según si es OPT o no
+        canvas = self.canvas_opt if is_opt else self.canvas_alg
+        self._draw_ram_canvas(canvas, computer)
 
         # Procesos
-        self.process_count_label.config(text=str(self.computer.get_process_count()))
-        
-        # Sim-time 
-        sim_time = self.computer.mmu.time
+        proc_label = self.process_count_label_opt if is_opt else self.process_count_label
+        proc_label.config(text=str(computer.get_process_count()))
+
+        # Sim-time
+        sim_time = computer.mmu.time
         sim_time_text = f"{sim_time} s"
-        self.sim_time_label_alg.config(text=sim_time_text)
+        if is_opt:
+            self.sim_time_label_opt.config(text=sim_time_text)
+        else:
+            self.sim_time_label_alg.config(text=sim_time_text)
 
-       # Thrashing
-        faults = self.computer.mmu.faults
+        # Thrashing
+        faults = computer.mmu.faults
         thrashing_percentage = (faults / sim_time) * 100 if sim_time > 0 else 0
-
         text1 = f"{faults} s"
         text2 = f"{thrashing_percentage:.2f} %"
-
         bg_color = "red" if thrashing_percentage > 50 else "white"
-        self.thrashing_label_1.config(text=text1, bg=bg_color)
-        self.thrashing_label_2.config(text=text2, bg=bg_color)
+
+        if is_opt:
+            self.thrashing_label_1_opt.config(text=text1, bg=bg_color)
+            self.thrashing_label_2_opt.config(text=text2, bg=bg_color)
+        else:
+            self.thrashing_label_1.config(text=text1, bg=bg_color)
+            self.thrashing_label_2.config(text=text2, bg=bg_color)
 
         # Fragmentación
-        fragmentation_count = (self.computer.mmu.calc_fragmentation())/ 1024
-        total_ram_bytes = 400 
-        fragmentation_percentage = (fragmentation_count / total_ram_bytes) * 100 if total_ram_bytes else 0
+        fragmentation_count = (computer.mmu.calc_fragmentation()) / 1024  # en KB
+        total_ram_kb = 400
+        fragmentation_percentage = (fragmentation_count / total_ram_kb) * 100 if total_ram_kb else 0
         text = f"{fragmentation_count:.1f} KB ({fragmentation_percentage:.1f}%)"
-        bg_color = "red" if fragmentation_count > total_ram_bytes / 2 else "white"
-        self.fragmentation_label.config(text=text, bg=bg_color)
+        bg_color = "red" if fragmentation_count > total_ram_kb / 2 else "white"
+
+        if is_opt:
+            self.fragmentation_label_opt.config(text=text, bg=bg_color)
+        else:
+            self.fragmentation_label.config(text=text, bg=bg_color)
 
         # RAM
-        ram_kb, ram_percent = self.computer.mmu.get_ram_usage(self.computer.ram_size_kb)
-        self.ram_kb_label.config(text=f"{ram_kb:.1f} KB")
-        self.ram_percent_label.config(text=f"{ram_percent:.1f} %")
+        ram_kb, ram_percent = computer.mmu.get_ram_usage(computer.ram_size_kb)
+        if is_opt:
+            self.ram_kb_label_opt.config(text=f"{ram_kb:.1f} KB")
+            self.ram_percent_label_opt.config(text=f"{ram_percent:.1f} %")
+        else:
+            self.ram_kb_label.config(text=f"{ram_kb:.1f} KB")
+            self.ram_percent_label.config(text=f"{ram_percent:.1f} %")
 
-        # VRAM 
-        disk_usage = self.computer.mmu.calc_disk_usage()
-        disk_percentage = (disk_usage / total_ram_bytes) * 100 if total_ram_bytes else 0
-        self.vram_kb_label.config(text=f"{disk_usage:.1f} KB")
-        self.vram_percent_label.config(text=f"{disk_percentage:.1f} %")
+        # VRAM
+        disk_usage = computer.mmu.calc_disk_usage()
+        disk_percentage = (disk_usage / total_ram_kb) * 100 if total_ram_kb else 0
+        if is_opt:
+            self.vram_kb_label_opt.config(text=f"{disk_usage:.1f} KB")
+            self.vram_percent_label_opt.config(text=f"{disk_percentage:.1f} %")
+        else:
+            self.vram_kb_label.config(text=f"{disk_usage:.1f} KB")
+            self.vram_percent_label.config(text=f"{disk_percentage:.1f} %")
 
         # Páginas
-        loaded_pages = self.computer.mmu.count_loaded_pages()
-        not_loaded_pages = self.computer.mmu.count_not_loaded_pages()
-        self.loaded_pages_label.config(text=str(loaded_pages))
-        self.unloaded_pages_label.config(text=str(not_loaded_pages))
+        loaded_pages = computer.mmu.count_loaded_pages()
+        not_loaded_pages = computer.mmu.count_not_loaded_pages()
 
-        if hasattr(self, "treeview"):
-            self.treeview.delete(*self.treeview.get_children())  # Vaciar
+        if is_opt:
+            self.loaded_pages_label_opt.config(text=str(loaded_pages))
+            self.unloaded_pages_label_opt.config(text=str(not_loaded_pages))
+        else:
+            self.loaded_pages_label.config(text=str(loaded_pages))
+            self.unloaded_pages_label.config(text=str(not_loaded_pages))
 
-            for i, process in enumerate(self.computer.process_table):
+        # Actualizar tabla principal (solo para algoritmo actual)
+        if not is_opt and hasattr(self, "treeview"):
+            self.treeview.delete(*self.treeview.get_children())
+            for i, process in enumerate(computer.process_table):
                 color = colors[i % len(colors)]
                 tag_name = f"process_{process.pid}"
                 self.treeview.tag_configure(tag_name, background=color)
-
                 for page_list in process.symbolTable.values():
                     for page in page_list:
                         self.treeview.insert(
@@ -521,6 +577,32 @@ class UI:
                             ),
                             tags=(tag_name,)
                         )
+
+        if is_opt and hasattr(self, "treeview_opt"):
+            self.treeview_opt.delete(*self.treeview_opt.get_children())
+            for i, process in enumerate(computer.process_table):
+                color = colors[i % len(colors)]
+                tag_name = f"opt_process_{process.pid}"
+                self.treeview_opt.tag_configure(tag_name, background=color)
+                for page_list in process.symbolTable.values():
+                    for page in page_list:
+                        self.treeview_opt.insert(
+                            "", "end",
+                            values=(
+                                page.pageID,
+                                process.pid,
+                                page.loaded,
+                                page.L_Addr,
+                                page.M_Addr,
+                                page.D_Addr,
+                                getattr(page, "loaded_t", ""),
+                                getattr(page, "mark", ""),
+                            ),
+                            tags=(tag_name,)
+                        )
+
+
+
 
     def run(self):
         self.root.mainloop()

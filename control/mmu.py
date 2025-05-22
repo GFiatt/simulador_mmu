@@ -4,7 +4,7 @@ from model.page import Page
 from model.fifo import FIFO
 from model.secondChance import SecondChance
 from model.mru import MRU
-from model.random import Random
+from model.rnd import rnd
 from model.opt import OPT
 
 import time
@@ -26,15 +26,13 @@ class MMU:
     
     def set_algorithm(self):
         if self.algorithm == "FIFO":
-            #self.algorithm = OPT()
             self.algorithm = FIFO()
-
         elif self.algorithm == "SC":
             self.algorithm = SecondChance()
         elif self.algorithm == "MRU":
             self.algorithm = MRU()
         elif self.algorithm == "RND": 
-            self.algorithm = Random()
+            self.algorithm = rnd()
         
     def calc_fragmentation(self):
         fragmentation = 0

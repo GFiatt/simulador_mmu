@@ -1,5 +1,4 @@
 from collections import deque
-
 class OPT():
     def __init__(self, allPages=[]): 
         self.allPages = allPages
@@ -56,12 +55,3 @@ class OPT():
                 memory.append(p)
                 return memory, hits, faults, pages, victim
         return memory, hits, faults, pages, None
-                
-                
-        #     print("Este es el queue: ", memory) #queue = [7]
-        #     print("Este es el pages: ", pages) #pages = [7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1]
-        #     print(f"El fault es: {faults}")      #fault = 1
-        # pages = memory
-        # return memory, hits, faults, pages, victim
-                    
-#OPT.replace([7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1], [7], hits=0, faults=0, frameSize=3)

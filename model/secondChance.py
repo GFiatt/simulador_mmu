@@ -4,9 +4,6 @@ from collections import deque
 class SecondChance():
     @staticmethod
     def replace(pages, memory, hits=0, faults=0, frameSize=100):
-        # pages [p1, p2, p3,..., p1] 
-        # current = p1 <- refBit = 1
-        # memory [p1, p8, p7,...]
         """
         Algoritmo Second-Chance (Clock).
         pages   : deque con las páginas restantes por atender (se modifica in-place).
