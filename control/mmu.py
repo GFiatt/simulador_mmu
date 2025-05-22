@@ -5,6 +5,7 @@ from model.fifo import FIFO
 from model.secondChance import SecondChance
 from model.mru import MRU
 from model.random import Random
+from model.opt import OPT
 
 import time
 from collections import deque
@@ -25,7 +26,9 @@ class MMU:
     
     def set_algorithm(self):
         if self.algorithm == "FIFO":
+            #self.algorithm = OPT()
             self.algorithm = FIFO()
+
         elif self.algorithm == "SC":
             self.algorithm = SecondChance()
         elif self.algorithm == "MRU":
@@ -40,6 +43,14 @@ class MMU:
                 fragmentation += 4*1024 - page.size_b
         return fragmentation
     
+    def calc_disk_usage(self):
+        total_used_bytes = 0
+        for page in self.pages:
+            if not page.loaded:
+                total_used_bytes += page.size_b 
+        disk_used_kb = total_used_bytes / 1024
+        return disk_used_kb
+
     def count_loaded_pages(self):
         loaded_count = 0
         for page in self.pages:
@@ -98,12 +109,7 @@ class MMU:
         for i in range(num_pages):
             l_addr = ptr if i == 0 else self.get_next_l_address()
             page_id = self.get_next_page_id()
-            # page = None
-            # if add_to_memory:
-            #     page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=True, loaded_t=self.clock)
-            #     self.memory.append(page)
-            # else:
-            page = Page(page_id, process.pid, l_addr, l_addr, '', loaded=False, loaded_t=self.clock)
+            page = Page(page_id, process.pid, l_addr, m_addr = l_addr, d_addr= '', loaded=False, loaded_t=self.clock)
 
             # size <= 4*1024
             if num_pages == 1:
@@ -115,8 +121,8 @@ class MMU:
             else:
                 page.size_b = 4 * 1024
 
-            #if add_to_memory:
-            self.pages.append(page)
+            if add_to_memory:
+                self.pages.append(page)
             process_pages.append(page)
 
         process.new(ptr, process_pages)
@@ -139,6 +145,8 @@ class MMU:
                     p.loaded_t = self.clock
                     p.M_Addr = idx
                     p.D_Addr = ''
+                    p.mark = page.mark
+                    p.refBit = page.refBit
                     break
 
     def mark_page_loaded(self, page):
@@ -159,19 +167,37 @@ class MMU:
                 p.D_Addr = self.pages.index(p)
                 break
 
+    def get_process_by_ptr(self, ptr: int): 
+        for page in self.pages:
+            if page.L_Addr == ptr:
+                return page.processID
+        return None 
+    
+
+
+
+
     def new(self, process: Process, size):
         process_ptr, process = self.create_pages(process, size)
         for page in process.symbolTable[process_ptr]:
-            if self.enough_memory(1) and not page.loaded:
+            is_in_memory = page in self.memory
+            if len(self.memory) < self.maxFrames and not is_in_memory:
                 page.loaded = True
                 page.loaded_t = self.clock
                 self.memory.append(page)
                 self.faults += 1
+                self.time = self.hits + (self.faults * 5)
+
             else:
                 #print(f"MMU: No hay suficiente memoria para el proceso {process.pid}, aplicando reemplazo")
                 self.memory, self.hits, self.faults, _, removed = self.algorithm.replace(
-                    deque([page]), self.memory, hits = self.hits, faults=self.faults, frameSize=self.maxFrames
+                    pages=deque([page]), 
+                    memory=self.memory, 
+                    hits=self.hits, 
+                    faults=self.faults, 
+                    frameSize=self.maxFrames
                 )
+
                 self.time = self.hits + (self.faults*5)
                 if removed:
                     self.mark_page_unloaded(removed)
@@ -180,12 +206,6 @@ class MMU:
                 self.update_memory()
 
         return process
-
-    def get_process_by_ptr(self, ptr: int): 
-        for page in self.pages:
-            if page.L_Addr == ptr:
-                return page.processID
-        return None 
     
     def use(self, process, ptr: int):
         if ptr not in process.symbolTable:
@@ -193,8 +213,13 @@ class MMU:
             return
         for page in process.symbolTable[ptr]:
             self.memory, self.hits, self.faults, _, removed = self.algorithm.replace(
-                    deque([page]), self.memory, hits = self.hits, faults=self.faults, frameSize=self.maxFrames
-                )
+                pages=deque([page]), 
+                memory=self.memory, 
+                hits=self.hits, 
+                faults=self.faults, 
+                frameSize=self.maxFrames
+            )
+
             self.time = self.hits + (self.faults*5)
             if removed:
                 self.mark_page_unloaded(removed)

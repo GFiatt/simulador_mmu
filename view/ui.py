@@ -116,11 +116,13 @@ class UI:
 
         self.computer = Computer(session=self.instruction_objects, algorithm=self.selected_algorithm)
         self.computer.mmu.set_algorithm()
-        print(f"Algoritmo seleccionado: {self.computer.mmu.algorithm.__class__.__name__}")
+        self.computer.prepare_all_pages_for_opt()
+        #print(f"Algoritmo seleccionado: {self.computer.mmu.algorithm.__class__.__name__}")
         #self.computer.run()
         self.mmu = self.computer.mmu
 
         self._build_layout()
+        self._update_statistics()
         self.simulation_index = 0
         self._run_next_instruction()
 
@@ -166,9 +168,9 @@ class UI:
                     raise ValueError(f"Formato inválido en línea:\n{line}")
 
             self.instructions = lines
-            print("Instrucciones cargadas desde archivo:")
-            for inst in self.instructions:
-                print(inst)
+            # print("Instrucciones cargadas desde archivo:")
+            # for inst in self.instructions:
+            #     print(inst)
 
             self._parse_instructions()
             return True
@@ -259,11 +261,11 @@ class UI:
         top_frame.pack(pady=10)
 
         tk.Label(top_frame, text="RAM - OPT", font=("MS Sans Serif", 9, "bold"), bg="#C0C0C0").pack()
-        self.canvas_opt = tk.Canvas(top_frame, height=25, width=1200, bg="white", relief="sunken", bd=2)
+        self.canvas_opt = tk.Canvas(top_frame, height=40, width=2000, bg="white", relief="sunken", bd=2)
         self.canvas_opt.pack()
 
         tk.Label(top_frame, text=f"RAM - [{self.selected_algorithm}]", font=("MS Sans Serif", 9, "bold"), bg="#C0C0C0").pack(pady=(10, 0))
-        self.canvas_alg = tk.Canvas(top_frame, height=25, width=1200, bg="white", relief="sunken", bd=2)
+        self.canvas_alg = tk.Canvas(top_frame, height=50, width=2000, bg="white", relief="sunken", bd=2)
         self.canvas_alg.pack()
 
         self._draw_ram_canvas(self.canvas_opt, [])
@@ -289,19 +291,29 @@ class UI:
         self.statistics_frame = self._create_statistics_block(self.bottom_frame, self.selected_algorithm)
         self.statistics_frame.pack(side="right", padx=40)
   
-    def _draw_ram_canvas(self, canvas, pages):
+    def _draw_ram_canvas(self, canvas, pages=None):
         canvas.delete("all")
-        x = 5
-        for i in range(60):
-            canvas.create_rectangle(x, 5, x + 18, 20, fill="gray", outline="black")
-            canvas.create_text(x + 9, 12, text="", font=("MS Sans Serif", 6))
-            x += 20
 
-            pages_in_ram = []
-        x = 5
+        total_blocks = 100
+        blocks_per_row = 50
         box_width = 18
-        box_height = 15
+        box_height = 20
         spacing = 2
+        start_x = 5
+        start_y = 5
+
+        # --- DIBUJAR CUADRITOS BASE (vacíos, grises) ---
+        for i in range(total_blocks):
+            row = i // blocks_per_row
+            col = i % blocks_per_row
+            x = start_x + col * (box_width + spacing)
+            y = start_y + row * (box_height + spacing)
+
+            canvas.create_rectangle(x, y, x + box_width, y + box_height, fill="gray", outline="black")
+            canvas.create_text(x + box_width // 2, y + box_height // 2, text="", font=("MS Sans Serif", 6))
+
+        # --- DIBUJAR PÁGINAS CARGADAS ---
+        pages_in_ram = []
 
         for i, process in enumerate(self.computer.process_table):
             color = colors[i % len(colors)]
@@ -310,21 +322,14 @@ class UI:
                     if page.loaded:
                         pages_in_ram.append((page, color))
 
-
         for i, (page, color) in enumerate(pages_in_ram[:100]):
-            canvas.create_rectangle(
-                x, 5,
-                x + box_width, 5 + box_height,
-                fill=color,
-                outline="black"
-            )
+            row = i // blocks_per_row
+            col = i % blocks_per_row
+            x = start_x + col * (box_width + spacing)
+            y = start_y + row * (box_height + spacing)
 
-            canvas.create_text(
-                x + box_width // 2, 5 + box_height // 2,
-                text=str(page.pageID),
-                font=("MS Sans Serif", 6)
-            )
-            x += box_width + spacing
+            canvas.create_rectangle(x, y, x + box_width, y + box_height, fill=color, outline="black")
+            canvas.create_text(x + box_width // 2, y + box_height // 2, text=str(page.pageID), font=("MS Sans Serif", 6))
 
     def _create_table_with_scroll(self, parent, title):
         frame = tk.LabelFrame(parent, text=title, bg="#C0C0C0")
@@ -417,6 +422,8 @@ class UI:
         return container
 
     def _update_statistics(self):
+        #print(f"[DEBUG] update_statistics() called | sim_time={self.computer.mmu.time}, faults={self.computer.mmu.faults}")
+
         self._draw_ram_canvas(self.canvas_alg, [])
 
         # Procesos
@@ -452,8 +459,10 @@ class UI:
         self.ram_percent_label.config(text=f"{ram_percent:.1f} %")
 
         # VRAM 
-        self.vram_kb_label.config(text="0")
-        self.vram_percent_label.config(text="0%")
+        disk_usage = self.computer.mmu.calc_disk_usage()
+        disk_percentage = (disk_usage / total_ram_bytes) * 100 if total_ram_bytes else 0
+        self.vram_kb_label.config(text=f"{disk_usage:.1f} KB")
+        self.vram_percent_label.config(text=f"{disk_percentage:.1f} %")
 
         # Páginas
         loaded_pages = self.computer.mmu.count_loaded_pages()
