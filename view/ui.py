@@ -3,8 +3,10 @@ from tkinter import ttk, filedialog, messagebox
 import random
 import os
 import re
+import threading
 from control.instruction import Instruction, Type
 from control.computer import Computer
+from model.opt import OPT
 import tkinter.font as font
 
 colors = [
@@ -23,7 +25,6 @@ colors = [
     "#FFFEF0", "#FFFFCC", "#FFFFE0", "#FFFFF0", "#FFFFF5", "#FFFFF7"
 ]
   
-
 class UI:
     def __init__(self):
         self.root = tk.Tk()
@@ -37,14 +38,12 @@ class UI:
 
         self.instructions = []
         self.instruction_objects = []
-        self.computer = None
-        self.mmu = None
+        self.computer_opt = None
+        self.computer_alg = None
 
         self.simulation_index = 0
         self.simulation_delay = 100  # milisegundos
         self.simulation_running = True  
-
-
 
         self._init_config_screen()
 
@@ -116,32 +115,51 @@ class UI:
         else:
             self._generate_instructions()
 
-        self.computer = Computer(session=self.instruction_objects, algorithm=self.selected_algorithm)
-        self.computer.mmu.set_algorithm()
-        self.computer.prepare_all_pages_for_opt()
-        #print(f"Algoritmo seleccionado: {self.computer.mmu.algorithm.__class__.__name__}")
-        #self.computer.run()
-        self.mmu = self.computer.mmu
+        self.computer_opt = Computer(session=self.instruction_objects, algorithm=OPT())
+        self.computer_opt.prepare_all_pages_for_opt()
+        self.computer_alg = Computer(session=self.instruction_objects, algorithm=self.selected_algorithm)
+        self.computer_alg.mmu.set_algorithm()
+        
+        t1 = threading.Thread(target=self.computer_opt.run)
+        t2 = threading.Thread(target=self.computer_alg.run)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
         self._build_layout()
-        self._update_statistics()
+        self._update_statistics_threaded()
         self.simulation_index = 0
         self._run_next_instruction()
 
+    def _update_statistics_threaded(self):
+        t_opt = threading.Thread(target=self._update_statistics, args=(self.computer_opt,))
+        t_alg = threading.Thread(target=self._update_statistics, args=(self.computer_alg,))
+        t_opt.start()
+        t_alg.start()
+        t_opt.join()
+        t_alg.join()
+   
     def _run_next_instruction(self):
         if not self.simulation_running:
             self.root.after(self.simulation_delay, self._run_next_instruction)
             return
 
-        if self.simulation_index < len(self.computer.session):
-            instruction = self.computer.session[self.simulation_index]
-            self.computer.run_single_instruction(instruction)
-            #self.opt_computer.run_single_instruction(instruction)
+        if self.simulation_index < len(self.computer_alg.session):
+            instruction = self.computer_alg.session[self.simulation_index]
 
-            # Redibujar UI
-            self._draw_ram_canvas(self.canvas_alg, self.computer)
-            #self._draw_ram_canvas(self.canvas_opt, self.opt_computer)
-            self._update_statistics()
+            # Crear dos hilos para ejecutar la instrucción en ambas computadoras
+            t1 = threading.Thread(target=self.computer_opt.run_single_instruction, args=(instruction,))
+            t2 = threading.Thread(target=self.computer_alg.run_single_instruction, args=(instruction,))
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
+
+            # Actualizar interfaz visual
+            self._draw_ram_canvas(self.canvas_opt, self.computer_opt)
+            self._draw_ram_canvas(self.canvas_alg, self.computer_alg)
+            self._update_statistics_threaded()
 
             self.simulation_index += 1
             self.root.after(self.simulation_delay, self._run_next_instruction)
@@ -318,7 +336,7 @@ class UI:
         self.simulation_running = True
         self._init_config_screen()
 
-    def _draw_ram_canvas(self, canvas, pages=None):
+    def _draw_ram_canvas(self, canvas, computer):
         canvas.delete("all")
 
         total_blocks = 100
@@ -342,7 +360,7 @@ class UI:
         # --- DIBUJAR PÁGINAS CARGADAS ---
         pages_in_ram = []
 
-        for i, process in enumerate(self.computer.process_table):
+        for i, process in enumerate(computer.process_table):
             color = colors[i % len(colors)]
             for page_list in process.symbolTable.values():
                 for page in page_list:
@@ -358,7 +376,7 @@ class UI:
             canvas.create_rectangle(x, y, x + box_width, y + box_height, fill=color, outline="black")
             canvas.create_text(x + box_width // 2, y + box_height // 2, text=str(page.pageID), font=("MS Sans Serif", 6))
 
-    def _create_table_with_scroll(self, parent, title):
+    def _create_table_with_scroll(self, parent, title, computer):
         frame = tk.LabelFrame(parent, text=title, bg="#C0C0C0")
         
         self.treeview = ttk.Treeview(
@@ -448,21 +466,21 @@ class UI:
 
         return container
 
-    def _update_statistics(self):
+    def _update_statistics(self, computer):
         #print(f"[DEBUG] update_statistics() called | sim_time={self.computer.mmu.time}, faults={self.computer.mmu.faults}")
 
         self._draw_ram_canvas(self.canvas_alg, [])
 
         # Procesos
-        self.process_count_label.config(text=str(self.computer.get_process_count()))
+        self.process_count_label.config(text=str(computer.get_process_count()))
         
         # Sim-time 
-        sim_time = self.computer.mmu.time
+        sim_time = computer.mmu.time
         sim_time_text = f"{sim_time} s"
         self.sim_time_label_alg.config(text=sim_time_text)
 
        # Thrashing
-        faults = self.computer.mmu.faults
+        faults = computer.mmu.faults
         thrashing_percentage = (faults / sim_time) * 100 if sim_time > 0 else 0
 
         text1 = f"{faults} s"
@@ -473,7 +491,7 @@ class UI:
         self.thrashing_label_2.config(text=text2, bg=bg_color)
 
         # Fragmentación
-        fragmentation_count = (self.computer.mmu.calc_fragmentation())/ 1024
+        fragmentation_count = (computer.mmu.calc_fragmentation())/ 1024
         total_ram_bytes = 400 
         fragmentation_percentage = (fragmentation_count / total_ram_bytes) * 100 if total_ram_bytes else 0
         text = f"{fragmentation_count:.1f} KB ({fragmentation_percentage:.1f}%)"
@@ -481,26 +499,26 @@ class UI:
         self.fragmentation_label.config(text=text, bg=bg_color)
 
         # RAM
-        ram_kb, ram_percent = self.computer.mmu.get_ram_usage(self.computer.ram_size_kb)
+        ram_kb, ram_percent = computer.mmu.get_ram_usage(self.computer.ram_size_kb)
         self.ram_kb_label.config(text=f"{ram_kb:.1f} KB")
         self.ram_percent_label.config(text=f"{ram_percent:.1f} %")
 
         # VRAM 
-        disk_usage = self.computer.mmu.calc_disk_usage()
+        disk_usage = computer.mmu.calc_disk_usage()
         disk_percentage = (disk_usage / total_ram_bytes) * 100 if total_ram_bytes else 0
         self.vram_kb_label.config(text=f"{disk_usage:.1f} KB")
         self.vram_percent_label.config(text=f"{disk_percentage:.1f} %")
 
         # Páginas
-        loaded_pages = self.computer.mmu.count_loaded_pages()
-        not_loaded_pages = self.computer.mmu.count_not_loaded_pages()
+        loaded_pages = computer.mmu.count_loaded_pages()
+        not_loaded_pages = computer.mmu.count_not_loaded_pages()
         self.loaded_pages_label.config(text=str(loaded_pages))
         self.unloaded_pages_label.config(text=str(not_loaded_pages))
 
         if hasattr(self, "treeview"):
             self.treeview.delete(*self.treeview.get_children())  # Vaciar
 
-            for i, process in enumerate(self.computer.process_table):
+            for i, process in enumerate(computer.process_table):
                 color = colors[i % len(colors)]
                 tag_name = f"process_{process.pid}"
                 self.treeview.tag_configure(tag_name, background=color)
