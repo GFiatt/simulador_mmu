@@ -28,14 +28,13 @@ class Computer:
                     temp_process = Process(instruction.pid)
                     _, created_process = self.mmu.create_pages(temp_process, instruction.size, add_to_memory=False)
 
+
                     # Extraer las listas de páginas desde el symbolTable
                     for page_list in created_process.symbolTable.values():
                         all_pages.extend(page_list)
 
             self.mmu.algorithm.allPages = all_pages
             print(f"[OPT] Total páginas precargadas: {len(all_pages)}")
-
-
 
     def get_process_by_pid(self, pid):
         for process in self.process_table:
@@ -46,8 +45,6 @@ class Computer:
     def get_process_count(self):
         return len(self.process_table)
     
-    
-
     def run(self):
         """
         Carga la sesión y ejecuta las instrucciones.
@@ -73,7 +70,9 @@ class Computer:
                     print(f"No se pudo crear el proceso {pid} (sin memoria) \nAgregando pagina en  disco..." )
 
             elif instruction.tipo == Type.USE:
-                self.mmu.use(instruction)
+                pid = self.mmu.get_process_by_ptr(instruction.ptr)
+                process = self.get_process_by_pid(pid)
+                self.mmu.use(process,instruction.ptr)
 
             elif instruction.tipo == Type.DELETE:
                 pid = self.mmu.get_process_by_ptr(instruction.ptr)
@@ -89,8 +88,39 @@ class Computer:
                 if process is not None:
                     self.process_table.remove(process)
 
+    def run_single_instruction(self, instruction):
+ 
+        if instruction.tipo == Type.NEW:
+            process = self.get_process_by_pid(instruction.pid)
+            if process is None:
+                process = self.mmu.new(Process(instruction.pid), instruction.size)
+            else:
+                self.process_table.remove(process)
+                process = self.mmu.new(process, instruction.size)
+            if process:
+                self.process_table.append(process)
+
+        elif instruction.tipo == Type.USE:
+                pid = self.mmu.get_process_by_ptr(instruction.ptr)
+                process = self.get_process_by_pid(pid)
+                if process is not None:
+                    self.mmu.use(process, instruction.ptr)
+                else:
+                    print(f"Process does not exists.")
+                
+        elif instruction.tipo == Type.DELETE:
+            pid = self.mmu.get_process_by_ptr(instruction.ptr)
+            process = self.get_process_by_pid(pid)
+            if process:
+                self.process_table.remove(process)
+                process = self.mmu.delete(process, instruction.ptr)
+                self.process_table.append(process)
+
+        elif instruction.tipo == Type.KILL:
+            self.mmu.kill(instruction.pid)
+            process = self.get_process_by_pid(instruction.pid)
+            if process:
+                self.process_table.remove(process)
+
 
         #print("PROCESOS EN LA COMPU",self.process_table)
-        print(f"[DEBUG] Algoritmo usado: {type(self.mmu.algorithm)}")
-        print(f"[DEBUG] Páginas en MMU: {len(self.mmu.pages)}")
-        print(f"[DEBUG] Tiene allPages? {'allPages' in dir(self.mmu.algorithm)}")

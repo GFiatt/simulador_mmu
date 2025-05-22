@@ -1,30 +1,38 @@
+from collections import deque
 class OPT():
+    def __init__(self, allPages=[]): 
+        self.allPages = allPages
+        self.pointer = 0 
 
-    def run(self, pages, memory, allPages, frameSize=100): # pages = [1, 2, 3, 4, 5] - en lista de espera a memoria
-        fault = 0 
-        hits = 0 
+
+    def replace(self, pages, memory, hits=0, faults=0, frameSize=100): # pages = [1, 2, 3, 4, 5] - en lista de espera a memoria
+
+        pages = list(pages)     
+        memory = deque(memory)
+
         for current, p in enumerate(pages):
             # La pagina esta en memoria
-            if p in queue:
+            if p in memory:
+                hits += 1
                 continue
             
             # Fallo de página
-            fault += 1
+            faults += 1
             
             # No se encuentra la pagina en memoria
             # Todavia hay espacio en memoria
-            if len(queue) < frameSize:
-                queue.append(p)
+            if len(memory) < frameSize:
+                memory.append(p)
             # Ya no hay espacio en memoria
-            elif len(queue) == frameSize:
+            elif len(memory) == frameSize:
                 # Calcular uso futuro de cada página en memoria
                 future = {}
                 # Buscamos de la pagina actual en adelante
-                futurePages = pages[current+1:]
+                future_pages = self.allPages[self.pointer + 1:]
                 # Se agregan los indices de la siguiente aparacion de q 
-                for q in queue:
+                for q in memory:
                     try:
-                        future[q] = futurePages.index(q)
+                        future[q] = future_pages.index(q)
                     # En caso de que ya no se use mas
                     except Exception:
                         future[q] = None 
@@ -43,12 +51,7 @@ class OPT():
                         max_use = use
                         victim = futurePage
                         
-                queue.remove(victim)
-                queue.append(p)
-                
-            print("Este es el queue: ", queue) #queue = [7]
-            print("Este es el pages: ", pages) #pages = [7, 0, 1, 2, 0, 3, 0, 4, 2, 3, 0, 3, 2, 1]
-            print(f"El fault es: {fault}")      #fault = 1
-        pages = queue
-        return fault, pages
-                    
+                memory.remove(victim)
+                memory.append(p)
+                return memory, hits, faults, pages, victim
+        return memory, hits, faults, pages, None
