@@ -17,6 +17,25 @@ class Computer:
         self.page_size_kb = 4
         self.mmu = MMU(algorithm)
 
+        if isinstance(self.mmu.algorithm, OPT):
+            self.prepare_all_pages_for_opt()
+
+    def prepare_all_pages_for_opt(self):
+        if isinstance(self.mmu.algorithm, OPT):
+            all_pages = []
+            for instruction in self.session:
+                if instruction.tipo == Type.NEW:
+                    temp_process = Process(instruction.pid)
+                    _, created_process = self.mmu.create_pages(temp_process, instruction.size, add_to_memory=False)
+
+
+                    # Extraer las listas de páginas desde el symbolTable
+                    for page_list in created_process.symbolTable.values():
+                        all_pages.extend(page_list)
+
+            self.mmu.algorithm.allPages = all_pages
+            print(f"[OPT] Total páginas precargadas: {len(all_pages)}")
+
     def get_process_by_pid(self, pid):
         for process in self.process_table:
             if process.pid == pid:
@@ -26,8 +45,6 @@ class Computer:
     def get_process_count(self):
         return len(self.process_table)
     
-    
-
     def run(self):
         """
         Carga la sesión y ejecuta las instrucciones.
@@ -70,7 +87,6 @@ class Computer:
                 process = self.get_process_by_pid(instruction.pid)
                 if process is not None:
                     self.process_table.remove(process)
-
 
     def run_single_instruction(self, instruction):
  
