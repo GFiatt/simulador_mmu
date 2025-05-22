@@ -2,6 +2,9 @@ from collections import deque
 from page import Page
 
 class FIFO:
+    def __init__(self): 
+        pass
+    
     @staticmethod
     def replace(pages, memory, hits=0, faults=0, frameSize=100):
         """

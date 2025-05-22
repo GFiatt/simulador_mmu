@@ -1,17 +1,37 @@
 from model.process import Process
 from model.page import Page
 
+from model.fifo import FIFO
+from model.secondChance import SecondChance
+from model.mru import MRU
+from model.random import Random
+
+import time
+from collections import deque
+
 class MMU:
     def __init__(self, algorithm):
-        self.pages = []
+        self.pages = [] # Reguero de paginas
+        self.memory = deque() # memory (T)
         self.clock = 0
+        self.hits = 0
         self.faults = 0
         self.maxFrames = 100
         self.algorithm = algorithm
         self.next_ptr = 0 
         self.next_page_id = 0
         self.fragmentation = 0
-
+    
+    def set_algorithm(self):
+        if self.algorithm == "FIFO":
+            self.algorithm = FIFO()
+        elif self.algorithm == "SC":
+            self.algorithm = SecondChance()
+        elif self.algorithm == "MRU":
+            self.algorithm = MRU()
+        elif self.algorithm == "RND": 
+            self.algorithm = Random()
+        
     def calc_fragmentation(self):
         fragmentation = 0
         for page in self.pages:
@@ -66,11 +86,7 @@ class MMU:
         return ram_used_kb, ram_percentage
 
     def enough_memory(self, size):
-        used_frames = 0
-        for page in self.pages:
-            if page.loaded:
-                used_frames += 1
-
+        used_frames = len(self.memory)
         available_frames = self.maxFrames - used_frames
         return available_frames >= size
 
@@ -81,11 +97,12 @@ class MMU:
         for i in range(num_pages):
             l_addr = ptr if i == 0 else self.get_next_l_address()
             page_id = self.get_next_page_id()
-            page = None
-            if add_to_memory:
-                page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=True, loaded_t=self.clock)
-            else:
-                page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=False, loaded_t=self.clock)
+            # page = None
+            # if add_to_memory:
+            #     page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=True, loaded_t=self.clock)
+            #     self.memory.append(page)
+            # else:
+            page = Page(page_id, process.pid, l_addr, l_addr, l_addr, loaded=False, loaded_t=self.clock)
 
             # size <= 4*1024
             if num_pages == 1:
@@ -102,24 +119,43 @@ class MMU:
             process_pages.append(page)
 
         process.new(ptr, process_pages)
-        return process
+        return ptr, process
 
     def new(self, process: Process, size):
-        #print(f"MMU: new {process.pid} {size} \n")
-        num_pages, remaining_bytes = self.byte_count(size)
-        process_pages = []
-        ptr = self.get_next_l_address()
-        if self.enough_memory(num_pages):
-            self.create_pages(process, size)
-            #print(f"MMU pages: {self.pages} \n")
-        else:
-            print(f"MMU: No hay suficiente memoria para el proceso {process.pid}")
-            return None
+        process_ptr, process = self.create_pages(process, size)
+        for page in process.symbolTable[process_ptr]:
+            if self.enough_memory(1) and not page.loaded:
+                page.loaded = True
+                page.loaded_t = self.clock
+                self.memory.append(page)
+                self.faults += 1
+            else:
+                print(f"MMU: No hay suficiente memoria para el proceso {process.pid}, aplicando reemplazo")
+                self.memory, self.hits, self.faults, _, removed = self.algorithm.replace(
+                    deque([page]), self.memory, faults=self.faults, frameSize=self.maxFrames
+                )
+                if removed:
+                    for p in self.pages:
+                        if p.pageID == removed.pageID:
+                            p.loaded = False
+                            p.loaded_t = None
+                            break
+                page.loaded = True
+
         return process
 
     def use(self, ptr: int):
         # Revisar las paginas fragmentadas
         #print(f"MMU: use {ptr}")
+        """
+            new 
+                no hay memoria
+                     proceso -> pags
+                     algoritmo(memory(T), pag) -> memory, faults, hits
+
+            use
+        
+        """
         pass
 
     def get_process_by_ptr(self, ptr: int): 
