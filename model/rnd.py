@@ -1,5 +1,6 @@
 from collections import deque
 import random
+
 class rnd():
     @staticmethod
     def replace(pages, memory, hits=0, faults=0, frameSize=100):
