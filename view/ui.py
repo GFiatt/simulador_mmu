@@ -24,7 +24,8 @@ colors = [
     "#FFF0F5", "#FFF5E1", "#FFF8DC", "#FFF9C4", "#FFFACD", "#FFFBCC", "#FFFCF5", "#FFFDFA",
     "#FFFEF0", "#FFFFCC", "#FFFFE0", "#FFFFF0", "#FFFFF5", "#FFFFF7"
 ]
-  
+
+#holaaaa
 class UI:
     def __init__(self):
         self.root = tk.Tk()
