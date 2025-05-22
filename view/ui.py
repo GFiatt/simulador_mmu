@@ -122,7 +122,7 @@ class UI:
         self.computer.prepare_all_pages_for_opt()
 
         self.opt_computer = Computer(session=self.instruction_objects, algorithm=OPT())
-        self.opt_computer.prepare_all_pages_for_opt()
+        #self.opt_computer.prepare_all_pages_for_opt()
 
 
         self._build_layout()

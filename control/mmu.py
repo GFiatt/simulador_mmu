@@ -207,7 +207,7 @@ class MMU:
     
     def use(self, process, ptr: int):
         if ptr not in process.symbolTable:
-            print(f"[ERROR] Ptr -> {ptr} does not exists in PID={process.pid}")
+            #print(f"[ERROR] Ptr -> {ptr} does not exists in PID={process.pid}")
             return
         for page in process.symbolTable[ptr]:
             self.memory, self.hits, self.faults, _, removed = self.algorithm.replace(

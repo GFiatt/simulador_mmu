@@ -1,57 +1,71 @@
 from collections import deque
+
 class OPT():
     def __init__(self, allPages=[]): 
         self.allPages = allPages
         self.pointer = 0 
 
-
-    def replace(self, pages, memory, hits=0, faults=0, frameSize=100): # pages = [1, 2, 3, 4, 5] - en lista de espera a memoria
-
+    def replace(self, pages, memory, hits=0, faults=0, frameSize=100):
         pages = list(pages)     
         memory = deque(memory)
 
         for current, p in enumerate(pages):
-            # La pagina esta en memoria
-            if p in memory:
+            # Verificar si la página ya está en memoria (comparando por ID)
+            in_memory = any(p.pageID == m.pageID for m in memory)
+            if in_memory:
                 hits += 1
                 continue
-            
-            # Fallo de página
+
+            # Página no está en memoria → fallo de página
             faults += 1
-            
-            # No se encuentra la pagina en memoria
-            # Todavia hay espacio en memoria
+
+            # Hay espacio libre → no aplicar reemplazo
             if len(memory) < frameSize:
                 memory.append(p)
-            # Ya no hay espacio en memoria
-            elif len(memory) == frameSize:
-                # Calcular uso futuro de cada página en memoria
-                future = {}
-                # Buscamos de la pagina actual en adelante
-                future_pages = self.allPages[self.pointer + 1:]
-                # Se agregan los indices de la siguiente aparacion de q 
-                for q in memory:
-                    try:
-                        future[q] = future_pages.index(q)
-                    # En caso de que ya no se use mas
-                    except Exception:
-                        future[q] = None 
-                
-                # Averiguar la pagina abandonada o con uso mas lejano
-                victim = None
-                max_use = -1
-                
-                for futurePage, use in future.items():
-                    # Página abandonada (no se usará más)
-                    if use is None:
-                        victim = futurePage
-                        break
-                    # Página con llamada tardia
-                    if use > max_use:
-                        max_use = use
-                        victim = futurePage
-                        
+                continue
+
+            # No hay espacio libre → aplicar algoritmo OPT
+            # Buscar próximos usos de cada página actual en memoria
+            future_pages = self.allPages[self.pointer + 1:]  # desde la siguiente instrucción
+            future_usage = {}
+
+            for m_page in memory:
+                try:
+                    # Buscar la primera aparición futura de esta página
+                    index = next(
+                        i for i, future_p in enumerate(future_pages)
+                        if future_p.pageID == m_page.pageID
+                    )
+                    future_usage[m_page.pageID] = index
+                except StopIteration:
+                    # No se volverá a usar
+                    future_usage[m_page.pageID] = None
+
+            # Elegir víctima: la página con uso más lejano o nunca usada
+            victim_page_id = None
+            max_future_index = -1
+
+            for pid, idx in future_usage.items():
+                if idx is None:
+                    # Página abandonada
+                    victim_page_id = pid
+                    break
+                elif idx > max_future_index:
+                    max_future_index = idx
+                    victim_page_id = pid
+
+            # Buscar la instancia real de esa página en memoria
+            victim = None
+            for m_page in memory:
+                if m_page.pageID == victim_page_id:
+                    victim = m_page
+                    break
+
+            # Reemplazar víctima por la nueva página
+            if victim:
                 memory.remove(victim)
-                memory.append(p)
-                return memory, hits, faults, pages, victim
+            memory.append(p)
+
+            return memory, hits, faults, pages, victim
+
         return memory, hits, faults, pages, None

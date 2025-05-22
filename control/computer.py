@@ -34,7 +34,7 @@ class Computer:
                         all_pages.extend(page_list)
 
             self.mmu.algorithm.allPages = all_pages
-            print(f"[OPT] Total páginas precargadas: {len(all_pages)}")
+            #rint(f"[OPT] Total páginas precargadas: {len(all_pages)}")
 
     def get_process_by_pid(self, pid):
         for process in self.process_table:
@@ -106,7 +106,8 @@ class Computer:
                 if process is not None:
                     self.mmu.use(process, instruction.ptr)
                 else:
-                    print(f"Process does not exists.")
+                    pass
+                    #print(f"Process does not exists.")
                 
         elif instruction.tipo == Type.DELETE:
             pid = self.mmu.get_process_by_ptr(instruction.ptr)
