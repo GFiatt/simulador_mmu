@@ -1,5 +1,5 @@
 from collections import deque
-from page import Page
+
 
 class SecondChance():
     @staticmethod
@@ -62,41 +62,41 @@ class SecondChance():
 
     # -------- Quick test ----------
 # Crear instancias de páginas para la prueba
-p0 = Page(page_id=0, process_id=1, l_addr=0, m_addr=0, d_addr=0)
-p1 = Page(page_id=1, process_id=1, l_addr=0, m_addr=0, d_addr=0)
-p2 = Page(page_id=2, process_id=1, l_addr=0, m_addr=0, d_addr=0)
-p3 = Page(page_id=3, process_id=2, l_addr=0, m_addr=0, d_addr=0)
-p4 = Page(page_id=4, process_id=2, l_addr=0, m_addr=0, d_addr=0)
-p5 = Page(page_id=5, process_id=2, l_addr=0, m_addr=0, d_addr=0)
-p6 = Page(page_id=6, process_id=2, l_addr=0, m_addr=0, d_addr=0)
-p7 = Page(page_id=7, process_id=3, l_addr=0, m_addr=0, d_addr=0)
+# p0 = Page(page_id=0, process_id=1, l_addr=0, m_addr=0, d_addr=0)
+# p1 = Page(page_id=1, process_id=1, l_addr=0, m_addr=0, d_addr=0)
+# p2 = Page(page_id=2, process_id=1, l_addr=0, m_addr=0, d_addr=0)
+# p3 = Page(page_id=3, process_id=2, l_addr=0, m_addr=0, d_addr=0)
+# p4 = Page(page_id=4, process_id=2, l_addr=0, m_addr=0, d_addr=0)
+# p5 = Page(page_id=5, process_id=2, l_addr=0, m_addr=0, d_addr=0)
+# p6 = Page(page_id=6, process_id=2, l_addr=0, m_addr=0, d_addr=0)
+# p7 = Page(page_id=7, process_id=3, l_addr=0, m_addr=0, d_addr=0)
 
-# Test Input
-pages = deque([p7, p0, p1, p2, p0, p3, p0, p4, p2, p3, p0, p3, p2, p1])  # 14 elementos
+# # Test Input
+# pages = deque([p7, p0, p1, p2, p0, p3, p0, p4, p2, p3, p0, p3, p2, p1])  # 14 elementos
 
-memory = deque()    
-hits = faults = 0
-frameSize = 3  # To match the web example
-stepPages = deque()
+# memory = deque()    
+# hits = faults = 0
+# frameSize = 3  # To match the web example
+# stepPages = deque()
 
-# Header
-print(f"{'Step':<5} {'Incoming':<8} {'Memory':<15}   Hits  Faults")
-print("-" * 40)
+# # Header
+# print(f"{'Step':<5} {'Incoming':<8} {'Memory':<15}   Hits  Faults")
+# print("-" * 40)
 
-step = 1
-while pages:
-    # Obtener la página actual ANTES de procesarla
-    current_page = pages[0]
+# step = 1
+# while pages:
+#     # Obtener la página actual ANTES de procesarla
+#     current_page = pages[0]
 
-    # Ejecutar el algoritmo FIFO
-    memory, hits, faults, _, removed = SecondChance.replace(pages, memory, hits, faults, frameSize)
+#     # Ejecutar el algoritmo FIFO
+#     memory, hits, faults, _, removed = SecondChance.replace(pages, memory, hits, faults, frameSize)
     
-    # Mostrar resultados del paso actual
-    mem_ids = [page.pageID for page in memory]
-    print(f"{step:<5} [ {current_page.pageID} ]      {str(mem_ids):<15}   {hits:<4}  {faults}")
-    step += 1
+#     # Mostrar resultados del paso actual
+#     mem_ids = [page.pageID for page in memory]
+#     print(f"{step:<5} [ {current_page.pageID} ]      {str(mem_ids):<15}   {hits:<4}  {faults}")
+#     step += 1
 
-print("\nFinal summary:")
-print("Page Faults = ", faults)
-print("Hit = ", hits)
-print("Final frame:", [page.pageID for page in memory])
+# print("\nFinal summary:")
+# print("Page Faults = ", faults)
+# print("Hit = ", hits)
+# print("Final frame:", [page.pageID for page in memory])

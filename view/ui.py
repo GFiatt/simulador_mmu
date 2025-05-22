@@ -42,6 +42,8 @@ class UI:
 
         self.simulation_index = 0
         self.simulation_delay = 100  # milisegundos
+        self.simulation_running = True  
+
 
 
         self._init_config_screen()
@@ -127,12 +129,18 @@ class UI:
         self._run_next_instruction()
 
     def _run_next_instruction(self):
+        if not self.simulation_running:
+            self.root.after(self.simulation_delay, self._run_next_instruction)
+            return
+
         if self.simulation_index < len(self.computer.session):
             instruction = self.computer.session[self.simulation_index]
             self.computer.run_single_instruction(instruction)
+            #self.opt_computer.run_single_instruction(instruction)
 
             # Redibujar UI
-            self._draw_ram_canvas(self.canvas_alg, [])  # <- Esto se puede mejorar luego
+            self._draw_ram_canvas(self.canvas_alg, self.computer)
+            #self._draw_ram_canvas(self.canvas_opt, self.opt_computer)
             self._update_statistics()
 
             self.simulation_index += 1
@@ -290,7 +298,26 @@ class UI:
 
         self.statistics_frame = self._create_statistics_block(self.bottom_frame, self.selected_algorithm)
         self.statistics_frame.pack(side="right", padx=40)
+
+        # ---------- CONTROL ----------
+        controls_frame = tk.Frame(self.root, bg="#C0C0C0")
+        controls_frame.pack(pady=10)
+
+        self.pause_button = tk.Button(controls_frame, text="Pausar", command=self._toggle_simulation, width=10)
+        self.pause_button.pack(side="left", padx=10)
+
+        reset_button = tk.Button(controls_frame, text="Reiniciar", command=self._reset_simulation, width=10)
+        reset_button.pack(side="left", padx=10)
+
+    def _toggle_simulation(self):
+        self.simulation_running = not self.simulation_running
+        new_text = "▶ Reanudar" if not self.simulation_running else "⏸ Pausar"
+        self.pause_button.config(text=new_text)
   
+    def _reset_simulation(self):
+        self.simulation_running = True
+        self._init_config_screen()
+
     def _draw_ram_canvas(self, canvas, pages=None):
         canvas.delete("all")
 
